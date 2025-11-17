@@ -1,0 +1,91 @@
+kubegrandson/
+├── lib/
+│   ├── main.dart
+│   ├── app.dart
+│   ├── core/
+│   │   ├── constants/
+│   │   │   ├── app_constants.dart
+│   │   │   └── theme_constants.dart
+│   │   ├── config/
+│   │   │   └── app_config.dart
+│   │   ├── routes/
+│   │   │   └── app_router.dart
+│   │   └── utils/
+│   │       ├── app_logger.dart
+│   │       └── thread_factory.dart
+│   ├── data/
+│   │   ├── models/
+│   │   │   ├── kubernetes/
+│   │   │   │   ├── pod.dart
+│   │   │   │   ├── namespace.dart
+│   │   │   │   ├── deployment.dart
+│   │   │   │   ├── service.dart
+│   │   │   │   └── log_entry.dart
+│   │   │   └── app_state/
+│   │   │       └── cluster_context.dart
+│   │   ├── repositories/
+│   │   │   ├── kubernetes_repository.dart
+│   │   │   └── config_repository.dart
+│   │   └── datasources/
+│   │       ├── kubernetes_api_client.dart
+│   │       └── local_storage_client.dart
+│   ├── domain/
+│   │   ├── services/
+│   │   │   ├── kubernetes_service.dart
+│   │   │   ├── log_stream_service.dart
+│   │   │   └── config_service.dart
+│   │   └── usecases/
+│   │       ├── fetch_pods_usecase.dart
+│   │       ├── stream_logs_usecase.dart
+│   │       └── manage_context_usecase.dart
+│   ├── presentation/
+│   │   ├── providers/
+│   │   │   ├── kubernetes_provider.dart
+│   │   │   ├── log_provider.dart
+│   │   │   └── theme_provider.dart
+│   │   ├── screens/
+│   │   │   ├── home/
+│   │   │   │   ├── home_screen.dart
+│   │   │   │   └── widgets/
+│   │   │   ├── log_viewer/
+│   │   │   │   ├── log_viewer_screen.dart
+│   │   │   │   └── widgets/
+│   │   │   │       ├── log_list_view.dart
+│   │   │   │       ├── json_viewer.dart
+│   │   │   │       ├── search_bar_widget.dart
+│   │   │   │       └── filter_toolbar.dart
+│   │   │   └── settings/
+│   │   │       └── settings_screen.dart
+│   │   ├── widgets/
+│   │   │   ├── common/
+│   │   │   │   ├── main_toolbar.dart
+│   │   │   │   ├── tab_pill.dart
+│   │   │   │   ├── custom_button.dart
+│   │   │   │   └── loading_indicator.dart
+│   │   │   └── log_viewer/
+│   │   │       ├── log_line_widget.dart
+│   │   │       └── json_tree_widget.dart
+│   │   └── theme/
+│   │       ├── app_theme.dart
+│   │       ├── app_colors.dart
+│   │       └── app_text_styles.dart
+│   └── infrastructure/
+│       ├── storage/
+│       │   └── secure_storage.dart
+│       └── network/
+│           └── http_client.dart
+├── assets/
+│   ├── icons/
+│   │   ├── app16.png
+│   │   ├── app32.png
+│   │   └── app64.png
+│   └── json_viewer/
+│       └── styles.css
+├── test/
+│   ├── widget_test.dart
+│   └── unit/
+├── integration_test/
+├── pubspec.yaml
+├── analysis_options.yaml
+├── LICENSE
+└── README.md

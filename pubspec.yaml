@@ -1,0 +1,91 @@
+name: kubegrandson
+description: "A Flutter-based Kubernetes log viewer application - son of Kubeson."
+publish_to: 'none'
+
+version: 2.3.2+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  provider: ^6.1.0
+  riverpod: ^2.4.9
+  flutter_riverpod: ^2.4.9
+
+  # Kubernetes Client
+  kubernetes: ^1.26.0+5
+
+  # HTTP & WebSocket
+  http: ^1.1.0
+  web_socket_channel: ^2.4.0
+
+  # YAML & JSON Processing
+  yaml: ^3.1.2
+  json_annotation: ^4.8.1
+
+  # Storage
+  shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.0.0
+
+  # Logging
+  logger: ^2.0.2
+
+  # UI Components
+  flutter_svg: ^2.0.9
+  google_fonts: ^6.1.0
+  flutter_markdown: ^0.6.18
+  scrollable_positioned_list: ^0.3.8
+
+  # Desktop Support
+  window_manager: ^0.3.7
+  file_picker: ^6.1.1
+
+  # Utilities
+  intl: ^0.18.1
+  equatable: ^2.0.5
+  freezed_annotation: ^2.4.1
+  path_provider: ^2.1.1
+  collection: ^1.18.0
+  go_router: ^12.1.3
+
+  # JSON Viewer
+  flutter_json_view: ^1.1.3
+
+  # Search & Highlighting
+  flutter_highlight: ^0.7.0
+
+  # Async utilities
+  async: ^2.11.0
+  rxdart: ^0.27.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.7
+  json_serializable: ^6.7.1
+  freezed: ^2.4.6
+
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/
+    - assets/json_viewer/
+
+  fonts:
+    - family: RobotoMono
+      fonts:
+        - asset: fonts/RobotoMono-Regular.ttf
+        - asset: fonts/RobotoMono-Bold.ttf
+          weight: 700
