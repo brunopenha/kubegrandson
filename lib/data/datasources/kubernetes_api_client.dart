@@ -156,7 +156,7 @@ class KubernetesApiClient {
         return KubeNamespace(
           name: item['metadata']['name'],
           uid: item['metadata']['uid'],
-          // status: item['status']['phase'] ?? 'Active',
+          status: item['status']['phase'] ?? 'Active',
           creationTimestamp:
               DateTime.parse(item['metadata']['creationTimestamp']),
           labels: Map<String, String>.from(item['metadata']['labels'] ?? {}),
@@ -229,7 +229,7 @@ class KubernetesApiClient {
           replicas: item['spec']['replicas'],
           availableReplicas: item['status']['availableReplicas'],
           readyReplicas: item['status']['readyReplicas'],
-          // updatedReplicas: item['status']['updatedReplicas'],
+          updatedReplicas: item['status']['updatedReplicas'],
           creationTimestamp:
               DateTime.parse(item['metadata']['creationTimestamp']),
           labels: Map<String, String>.from(item['metadata']['labels'] ?? {}),

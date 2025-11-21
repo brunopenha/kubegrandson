@@ -1,110 +1,89 @@
-import 'package:k8s/k8s.dart';
-import 'package:kubernetes/core_v1.dart' hide ContainerStatus;
-
+import 'package:k8s/k8s.dart' as k8s;
 import '../../core/utils/app_logger.dart';
-import '../../data/models/kubernetes/pod.dart';
+import '../../data/models/kubernetes/pod.dart' as models;
 
 class KubernetesService {
-  ApiClient? _client;
-  String? _currentContext;
+  k8s.ApiClient? _client;
 
   Future<void> initialize(String kubeconfigPath) async {
     try {
-      // final config = Configuration.fromKubeconfig(kubeconfigPath);
-      Kubernetes k8s = Kubernetes();
-      await k8s.initDefault();
+      final kubernetes = k8s.Kubernetes();
+      await kubernetes.initFromFile(kubeconfigPath);
+      _client = kubernetes.client;
 
-      _client = k8s.client;
-      //_currentContext = k8s.client.
-      final response1 = await _client?.getVersionApi().getCode();
-      AppLogger.info('Kubernetes client initialized: $_currentContext');
-      AppLogger.info('Kubernetes client initialized: $response1');
+      final versionApi = k8s.VersionApi(_client!.dio);
+      final version = await versionApi.getCode();
+
+      AppLogger.info('Kubernetes client initialized');
+      AppLogger.info('Version: ${version.data?.gitVersion}');
     } catch (e, stackTrace) {
       AppLogger.error('Failed to initialize Kubernetes client', e, stackTrace);
       rethrow;
     }
   }
 
-  Future<List<KubePod>?> fetchPods(String namespace) async {
-    if (_client == null) {
-      throw Exception('Kubernetes client not initialized');
-    }
+  Future<List<models.KubePod>> fetchPods(String namespace) async {
+    final api = k8s.CoreV1Api(_client!.dio);
+    final response = namespace == 'all'
+        ? await api.listPodForAllNamespaces()
+        : await api.listNamespacedPod(namespace: namespace);
 
-    try {
-      final pods = namespace == 'all'
-          ? await _client!.getCoreV1Api().listPodForAllNamespaces()
-          : await _client!
-              .getCoreV1Api()
-              .listNamespacedPod(namespace: namespace);
-
-      return pods.data?.items.map((pod) {
-        return KubePod(
-          name: pod.metadata?.name ?? 'Unknown',
-          namespace: pod.metadata?.namespace ?? namespace,
-          uid: pod.metadata?.uid,
-          phase: pod.status?.phase ?? 'Unknown',
-          podIP: pod.status?.podIP,
-          nodeName: pod.spec?.nodeName,
-          creationTimestamp: pod.metadata?.creationTimestamp,
-          labels: pod.metadata?.labels?.cast<String, String>(),
-          annotations: pod.metadata?.annotations?.cast<String, String>(),
-          containerStatuses: pod.status?.containerStatuses
-              ?.map((cs) => ContainerStatus(
-                    name: cs.name,
-                    ready: cs.ready,
-                    restartCount: cs.restartCount,
-                    image: cs.image,
-                    state: cs.state != null
-                        ? ContainerState(
-                            running: cs.state!.running != null
-                                ? ContainerStateRunning(
-                                    startedAt: cs.state!.running!.startedAt)
-                                : null,
-                            waiting: cs.state!.waiting != null
-                                ? ContainerStateWaiting(
-                                    reason: cs.state!.waiting!.reason,
-                                    message: cs.state!.waiting!.message)
-                                : null,
-                            terminated: cs.state!.terminated != null
-                                ? ContainerStateTerminated(
-                                    reason: cs.state!.terminated!.reason,
-                                    message: cs.state!.terminated!.message,
-                                    exitCode: cs.state!.terminated!.exitCode,
-                                    startedAt: cs.state!.terminated!.startedAt,
-                                    finishedAt:
-                                        cs.state!.terminated!.finishedAt)
-                                : null,
-                          )
-                        : null,
-                  ))
-              .toList(),
-          restartCount: pod.status?.containerStatuses
-                  ?.fold(0, (sum, cs) => sum! + cs.restartCount) ??
-              0,
-        );
-      }).toList();
-    } catch (e, stackTrace) {
-      AppLogger.error('Failed to fetch pods', e, stackTrace);
-      rethrow;
-    }
+    final items = response.data?.items ?? [];
+    return items.map((pod) {
+      return models.KubePod(
+        name: pod.metadata?.name ?? 'Unknown',
+        namespace: pod.metadata?.namespace ?? namespace,
+        uid: pod.metadata?.uid,
+        phase: pod.status?.phase ?? 'Unknown',
+        podIP: pod.status?.podIP,
+        nodeName: pod.spec?.nodeName,
+        creationTimestamp: pod.metadata?.creationTimestamp,
+        labels: pod.metadata?.labels?.cast<String, String>(),
+        annotations: pod.metadata?.annotations?.cast<String, String>(),
+        containerStatuses: pod.status?.containerStatuses?.map((cs) {
+          return models.ContainerStatus(
+            name: cs.name,
+            ready: cs.ready,
+            restartCount: cs.restartCount,
+            image: cs.image,
+            state: cs.state,
+          );
+        }).toList(),
+        restartCount: pod.status?.containerStatuses
+            ?.fold(0, (sum, cs) => sum! + cs.restartCount) ??
+            0,
+      );
+    }).toList();
   }
 
   Future<List<String>> fetchNamespaces() async {
-    if (_client == null) {
-      throw Exception('Kubernetes client not initialized');
-    }
+    final api = k8s.CoreV1Api(_client!.dio);
+    final response = await api.listNamespace();
+    return response.data?.items
+        ?.map((ns) => ns.metadata?.name ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList() ??
+        [];
+  }
 
-    try {
-      final namespaces = await _client!.listNamespace();
+  Future<String> readPodLogs(String namespace, String podName) async {
+    final api = k8s.CoreV1Api(_client!.dio);
+    final response = await api.readNamespacedPodLog(
+      name: podName,
+      namespace: namespace,
+      follow: true,
+    );
+    return response.data ?? '';
+  }
 
-      return namespaces.items
-          .map((ns) => ns.metadata?.name ?? '')
-          .where((name) => name.isNotEmpty)
-          .toList();
-    } catch (e, stackTrace) {
-      AppLogger.error('Failed to fetch namespaces', e, stackTrace);
-      rethrow;
-    }
+  Future<void> deletePod(String namespace, String podName) async {
+    final api = k8s.CoreV1Api(_client!.dio);
+    await api.deleteNamespacedPod(name: podName, namespace: namespace);
+    AppLogger.info('Deleted pod: $namespace/$podName');
+  }
+
+  void dispose() {
+    _client = null; // no explicit close needed
   }
 
   Stream<String> streamLogs({
@@ -114,45 +93,14 @@ class KubernetesService {
     int? tailLines,
     bool follow = true,
   }) async* {
-    if (_client == null) {
-      throw Exception('Kubernetes client not initialized');
-    }
-
-    try {
-      final logStream = _client!.readNamespacedPodLog(
-        podName,
-        namespace,
-        container: containerName,
-        follow: follow,
-        tailLines: tailLines,
-      );
-
-      await for (final log in logStream) {
-        yield log;
-      }
-    } catch (e, stackTrace) {
-      AppLogger.error('Failed to stream logs', e, stackTrace);
-      rethrow;
-    }
-  }
-
-  Future<void> deletePod(String namespace, String podName) async {
-    if (_client == null) {
-      throw Exception('Kubernetes client not initialized');
-    }
-
-    try {
-      final api = CoreV1Api(_client!);
-      await api.deleteNamespacedPod(podName, namespace);
-      AppLogger.info('Deleted pod: $namespace/$podName');
-    } catch (e, stackTrace) {
-      AppLogger.error('Failed to delete pod', e, stackTrace);
-      rethrow;
-    }
-  }
-
-  void dispose() {
-    _client?.close();
-    _client = null;
+    final api = k8s.CoreV1Api(_client!.dio);
+    final response = await api.readNamespacedPodLog(
+      name: podName,
+      namespace: namespace,
+      container: containerName,
+      follow: follow,
+      tailLines: tailLines,
+    );
+    yield response.data ?? '';
   }
 }

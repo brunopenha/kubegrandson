@@ -47,7 +47,7 @@ ContainerStatus _$ContainerStatusFromJson(Map<String, dynamic> json) =>
       name: json['name'] as String,
       ready: json['ready'] as bool,
       restartCount: (json['restartCount'] as num?)?.toInt() ?? 0,
-      image: json['image'] as String?,
+      image: json['image'] as String?, state: null,
     );
 
 Map<String, dynamic> _$ContainerStatusToJson(ContainerStatus instance) =>

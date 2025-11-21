@@ -17,7 +17,7 @@ class KubeNamespace {
     this.phase = 'Active',
     this.creationTimestamp,
     this.labels,
-    this.annotations,
+    this.annotations, required status,
   });
 
   factory KubeNamespace.fromJson(Map<String, dynamic> json) =>

@@ -27,7 +27,7 @@ class KubeDeployment {
     this.creationTimestamp,
     this.labels,
     this.annotations,
-    this.strategy,
+    this.strategy, required updatedReplicas,
   });
 
   factory KubeDeployment.fromJson(Map<String, dynamic> json) =>

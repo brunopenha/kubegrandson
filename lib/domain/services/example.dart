@@ -28,7 +28,6 @@ Future<void> main(List<String> args) async {
   // list pods for all namespaces
   final response2 = await coreV1Api.listPodForAllNamespaces();
   print('Pod count for all namespaces: ${response2.data?.items.length}');
-  print('Pod count for all namespaces: ${response2.data?.items.forEach(n -> print(n.))}');
 
   // read a deployment
   V1Deployment? existingDeployment;
