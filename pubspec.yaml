@@ -20,6 +20,8 @@ dependencies:
 
   # Kubernetes Client
   kubernetes: ^1.26.0+5
+  kubeconfig: ^1.0.3
+  k8s: ^1.27.0+dev.2
 
   # HTTP & WebSocket
   http: ^1.1.0
@@ -64,6 +66,7 @@ dependencies:
   async: ^2.11.0
   rxdart: ^0.27.7
 
+  path: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,14 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:yaml/yaml.dart';
+
 import '../../core/config/app_config.dart';
 import '../../core/utils/app_logger.dart';
-import '../models/kubernetes/pod.dart';
-import '../models/kubernetes/namespace.dart';
-import '../models/kubernetes/deployment.dart';
-import '../models/kubernetes/service.dart';
 import '../models/app_state/cluster_context.dart';
+import '../models/kubernetes/deployment.dart';
+import '../models/kubernetes/namespace.dart';
+import '../models/kubernetes/pod.dart';
+import '../models/kubernetes/service.dart';
 
 class KubernetesApiClient {
   String? _apiServer;
@@ -26,7 +28,8 @@ class KubernetesApiClient {
       final configFile = File(config.kubeConfigPath);
 
       if (!await configFile.exists()) {
-        throw Exception('Kubeconfig file not found at ${config.kubeConfigPath}');
+        throw Exception(
+            'Kubeconfig file not found at ${config.kubeConfigPath}');
       }
 
       final content = await configFile.readAsString();
@@ -38,7 +41,7 @@ class KubernetesApiClient {
       // Find context details
       final contexts = yamlDoc['contexts'] as List;
       final contextData = contexts.firstWhere(
-            (c) => c['name'] == _currentContext,
+        (c) => c['name'] == _currentContext,
         orElse: () => throw Exception('Context not found'),
       );
 
@@ -49,7 +52,7 @@ class KubernetesApiClient {
       // Find cluster details
       final clusters = yamlDoc['clusters'] as List;
       final clusterData = clusters.firstWhere(
-            (c) => c['name'] == clusterName,
+        (c) => c['name'] == clusterName,
         orElse: () => throw Exception('Cluster not found'),
       );
 
@@ -58,7 +61,7 @@ class KubernetesApiClient {
       // Find user details
       final users = yamlDoc['users'] as List;
       final userData = users.firstWhere(
-            (u) => u['name'] == userName,
+        (u) => u['name'] == userName,
         orElse: () => throw Exception('User not found'),
       );
 
@@ -154,9 +157,11 @@ class KubernetesApiClient {
           name: item['metadata']['name'],
           uid: item['metadata']['uid'],
           // status: item['status']['phase'] ?? 'Active',
-          creationTimestamp: DateTime.parse(item['metadata']['creationTimestamp']),
+          creationTimestamp:
+              DateTime.parse(item['metadata']['creationTimestamp']),
           labels: Map<String, String>.from(item['metadata']['labels'] ?? {}),
-          annotations: Map<String, String>.from(item['metadata']['annotations'] ?? {}),
+          annotations:
+              Map<String, String>.from(item['metadata']['annotations'] ?? {}),
         );
       }).toList();
     } catch (e, stack) {
@@ -176,11 +181,12 @@ class KubernetesApiClient {
       return items.map((item) {
         final containerStatuses = (item['status']['containerStatuses'] as List?)
             ?.map((cs) => ContainerStatus(
-          name: cs['name'],
-          ready: cs['ready'],
-          restartCount: cs['restartCount'],
-          image: cs['image'],
-        ))
+                  name: cs['name'],
+                  ready: cs['ready'],
+                  restartCount: cs['restartCount'],
+                  image: cs['image'],
+                  state: cs['state'],
+                ))
             .toList();
 
         return KubePod(
@@ -190,11 +196,15 @@ class KubernetesApiClient {
           phase: item['status']['phase'] ?? 'Unknown',
           podIP: item['status']['podIP'],
           nodeName: item['spec']['nodeName'],
-          creationTimestamp: DateTime.parse(item['metadata']['creationTimestamp']),
+          creationTimestamp:
+              DateTime.parse(item['metadata']['creationTimestamp']),
           labels: Map<String, String>.from(item['metadata']['labels'] ?? {}),
-          annotations: Map<String, String>.from(item['metadata']['annotations'] ?? {}),
+          annotations:
+              Map<String, String>.from(item['metadata']['annotations'] ?? {}),
           containerStatuses: containerStatuses,
-          restartCount: containerStatuses?.fold(0, (sum, cs) => sum! + cs.restartCount) ?? 0,
+          restartCount:
+              containerStatuses?.fold(0, (sum, cs) => sum! + cs.restartCount) ??
+                  0,
         );
       }).toList();
     } catch (e, stack) {
@@ -220,9 +230,11 @@ class KubernetesApiClient {
           availableReplicas: item['status']['availableReplicas'],
           readyReplicas: item['status']['readyReplicas'],
           // updatedReplicas: item['status']['updatedReplicas'],
-          creationTimestamp: DateTime.parse(item['metadata']['creationTimestamp']),
+          creationTimestamp:
+              DateTime.parse(item['metadata']['creationTimestamp']),
           labels: Map<String, String>.from(item['metadata']['labels'] ?? {}),
-          annotations: Map<String, String>.from(item['metadata']['annotations'] ?? {}),
+          annotations:
+              Map<String, String>.from(item['metadata']['annotations'] ?? {}),
         );
       }).toList();
     } catch (e, stack) {
@@ -242,12 +254,12 @@ class KubernetesApiClient {
       return items.map((item) {
         final ports = (item['spec']['ports'] as List?)
             ?.map((p) => ServicePort(
-          name: p['name'],
-          port: p['port'],
-          targetPort: p['targetPort'],
-          protocol: p['protocol'] ?? 'TCP',
-          nodePort: p['nodePort'],
-        ))
+                  name: p['name'],
+                  port: p['port'],
+                  targetPort: p['targetPort'],
+                  protocol: p['protocol'] ?? 'TCP',
+                  nodePort: p['nodePort'],
+                ))
             .toList();
 
         return KubeService(
@@ -258,9 +270,11 @@ class KubernetesApiClient {
           clusterIP: item['spec']['clusterIP'],
           externalIPs: (item['spec']['externalIPs'] as List?)?.cast<String>(),
           ports: ports,
-          creationTimestamp: DateTime.parse(item['metadata']['creationTimestamp']),
+          creationTimestamp:
+              DateTime.parse(item['metadata']['creationTimestamp']),
           labels: Map<String, String>.from(item['metadata']['labels'] ?? {}),
-          annotations: Map<String, String>.from(item['metadata']['annotations'] ?? {}),
+          annotations:
+              Map<String, String>.from(item['metadata']['annotations'] ?? {}),
           selector: Map<String, String>.from(item['spec']['selector'] ?? {}),
         );
       }).toList();
@@ -278,7 +292,8 @@ class KubernetesApiClient {
     int? tailLines,
   }) async* {
     try {
-      var url = '$_apiServer/api/v1/namespaces/$namespace/pods/$podName/log?follow=$follow';
+      var url =
+          '$_apiServer/api/v1/namespaces/$namespace/pods/$podName/log?follow=$follow';
       if (containerName != null) {
         url += '&container=$containerName';
       }

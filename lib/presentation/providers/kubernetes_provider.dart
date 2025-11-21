@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../data/models/kubernetes/pod.dart';
 import '../../domain/services/kubernetes_service.dart';
 
@@ -16,7 +17,7 @@ final namespacesProvider = FutureProvider<List<String>>((ref) async {
 final selectedNamespaceProvider = StateProvider<String>((ref) => 'default');
 
 final podsProvider = FutureProvider.family<List<KubePod>, String>(
-      (ref, namespace) async {
+  (ref, namespace) async {
     final service = ref.watch(kubernetesServiceProvider);
     return service.fetchPods(namespace);
   },
@@ -78,8 +79,8 @@ class PodFilterNotifier extends StateNotifier<PodFilterState> {
 }
 
 final podFilterProvider =
-StateNotifierProvider<PodFilterNotifier, PodFilterState>(
-      (ref) => PodFilterNotifier(),
+    StateNotifierProvider<PodFilterNotifier, PodFilterState>(
+  (ref) => PodFilterNotifier(),
 );
 
 final filteredPodsProvider = Provider<AsyncValue<List<KubePod>>>((ref) {
@@ -93,7 +94,7 @@ final filteredPodsProvider = Provider<AsyncValue<List<KubePod>>>((ref) {
     if (filter.searchQuery.isNotEmpty) {
       filtered = filtered
           .where((pod) =>
-          pod.name.toLowerCase().contains(filter.searchQuery.toLowerCase()))
+              pod.name.toLowerCase().contains(filter.searchQuery.toLowerCase()))
           .toList();
     }
 

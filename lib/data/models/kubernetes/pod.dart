@@ -61,6 +61,7 @@ class ContainerStatus {
     required this.ready,
     this.restartCount = 0,
     this.image,
+    required state,
   });
 
   factory ContainerStatus.fromJson(Map<String, dynamic> json) =>

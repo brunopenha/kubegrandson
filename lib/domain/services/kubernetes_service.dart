@@ -1,37 +1,43 @@
-import 'package:http/http.dart';
-import 'package:kubernetes/kubernetes.dart';
+import 'package:k8s/k8s.dart';
+import 'package:kubernetes/core_v1.dart' hide ContainerStatus;
+
 import '../../core/utils/app_logger.dart';
 import '../../data/models/kubernetes/pod.dart';
-import 'package:kubernetes/kubernetes.dart' as k8s;
-
 
 class KubernetesService {
-  Client? _client;
+  ApiClient? _client;
   String? _currentContext;
 
   Future<void> initialize(String kubeconfigPath) async {
     try {
-      final config = Configuration.fromKubeconfig(kubeconfigPath);
-      _client = Client(config);
-      _currentContext = config.currentContext;
+      // final config = Configuration.fromKubeconfig(kubeconfigPath);
+      Kubernetes k8s = Kubernetes();
+      await k8s.initDefault();
+
+      _client = k8s.client;
+      //_currentContext = k8s.client.
+      final response1 = await _client?.getVersionApi().getCode();
       AppLogger.info('Kubernetes client initialized: $_currentContext');
+      AppLogger.info('Kubernetes client initialized: $response1');
     } catch (e, stackTrace) {
       AppLogger.error('Failed to initialize Kubernetes client', e, stackTrace);
       rethrow;
     }
   }
 
-  Future<List<KubePod>> fetchPods(String namespace) async {
+  Future<List<KubePod>?> fetchPods(String namespace) async {
     if (_client == null) {
       throw Exception('Kubernetes client not initialized');
     }
 
     try {
       final pods = namespace == 'all'
-          ? await _client!.listPodForAllNamespaces()
-          : await _client!.listNamespacedPod(namespace);
+          ? await _client!.getCoreV1Api().listPodForAllNamespaces()
+          : await _client!
+              .getCoreV1Api()
+              .listNamespacedPod(namespace: namespace);
 
-      return pods.items.map((pod) {
+      return pods.data?.items.map((pod) {
         return KubePod(
           name: pod.metadata?.name ?? 'Unknown',
           namespace: pod.metadata?.namespace ?? namespace,
@@ -44,36 +50,36 @@ class KubernetesService {
           annotations: pod.metadata?.annotations?.cast<String, String>(),
           containerStatuses: pod.status?.containerStatuses
               ?.map((cs) => ContainerStatus(
-            name: cs.name,
-            ready: cs.ready,
-            restartCount: cs.restartCount,
-            image: cs.image,
-            state: cs.state != null
-                ? ContainerState(
-              running: cs.state!.running != null
-                  ? ContainerStateRunning(
-                  startedAt: cs.state!.running!.startedAt)
-                  : null,
-              waiting: cs.state!.waiting != null
-                  ? ContainerStateWaiting(
-                  reason: cs.state!.waiting!.reason,
-                  message: cs.state!.waiting!.message)
-                  : null,
-              terminated: cs.state!.terminated != null
-                  ? ContainerStateTerminated(
-                  reason: cs.state!.terminated!.reason,
-                  message: cs.state!.terminated!.message,
-                  exitCode: cs.state!.terminated!.exitCode,
-                  startedAt: cs.state!.terminated!.startedAt,
-                  finishedAt:
-                  cs.state!.terminated!.finishedAt)
-                  : null,
-            )
-                : null,
-          ))
+                    name: cs.name,
+                    ready: cs.ready,
+                    restartCount: cs.restartCount,
+                    image: cs.image,
+                    state: cs.state != null
+                        ? ContainerState(
+                            running: cs.state!.running != null
+                                ? ContainerStateRunning(
+                                    startedAt: cs.state!.running!.startedAt)
+                                : null,
+                            waiting: cs.state!.waiting != null
+                                ? ContainerStateWaiting(
+                                    reason: cs.state!.waiting!.reason,
+                                    message: cs.state!.waiting!.message)
+                                : null,
+                            terminated: cs.state!.terminated != null
+                                ? ContainerStateTerminated(
+                                    reason: cs.state!.terminated!.reason,
+                                    message: cs.state!.terminated!.message,
+                                    exitCode: cs.state!.terminated!.exitCode,
+                                    startedAt: cs.state!.terminated!.startedAt,
+                                    finishedAt:
+                                        cs.state!.terminated!.finishedAt)
+                                : null,
+                          )
+                        : null,
+                  ))
               .toList(),
-          restartCount: pod.status?.containerStatuses?.fold(
-              0, (sum, cs) => sum + cs.restartCount) ??
+          restartCount: pod.status?.containerStatuses
+                  ?.fold(0, (sum, cs) => sum! + cs.restartCount) ??
               0,
         );
       }).toList();
