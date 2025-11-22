@@ -27,7 +27,7 @@ KubeDeployment _$KubeDeploymentFromJson(Map<String, dynamic> json) =>
       strategy: json['strategy'] == null
           ? null
           : DeploymentStrategy.fromJson(
-              json['strategy'] as Map<String, dynamic>),
+              json['strategy'] as Map<String, dynamic>), updatedReplicas: null,
     );
 
 Map<String, dynamic> _$KubeDeploymentToJson(KubeDeployment instance) =>

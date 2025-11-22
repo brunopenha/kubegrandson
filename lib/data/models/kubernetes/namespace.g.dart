@@ -19,7 +19,7 @@ KubeNamespace _$KubeNamespaceFromJson(Map<String, dynamic> json) =>
       ),
       annotations: (json['annotations'] as Map<String, dynamic>?)?.map(
         (k, e) => MapEntry(k, e as String),
-      ),
+      ), status: null,
     );
 
 Map<String, dynamic> _$KubeNamespaceToJson(KubeNamespace instance) =>

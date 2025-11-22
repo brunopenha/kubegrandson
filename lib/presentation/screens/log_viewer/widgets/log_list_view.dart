@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,13 +78,12 @@ class _LogListViewState extends ConsumerState<LogListView> {
       itemPositionsListener: widget.positionsListener,
       itemBuilder: (context, index) {
         final log = logs[index];
-        final isSelected = _selectedLineIndex == index;
+        final selected = ref.watch(logProvider(widget.podKey)).selectedLogEntry;
+        final isSelected = selected == log;
 
         return InkWell(
           onTap: () {
-            setState(() {
-              _selectedLineIndex = isSelected ? null : index;
-            });
+            ref.read(logProvider(widget.podKey).notifier).selectLog(isSelected ? null : log);
           },
           onSecondaryTap: () {
             _showContextMenu(context, log.text);
@@ -101,18 +102,22 @@ class _LogListViewState extends ConsumerState<LogListView> {
                   width: 60,
                   child: Text(
                     '${log.lineNumber}',
-                    style: AppTextStyles.monospaceSmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTextStyles.monospaceSmall.copyWith(color: AppColors.textSecondary),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 200,
+                  child: Text(
+                    log.source ?? '',
+                    style: AppTextStyles.monospaceSmall.copyWith(color: AppColors.textSecondary),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: SelectableText(
-                    log.text,
-                    style: AppTextStyles.monospaceLarge.copyWith(
-                      color: _getLogColor(log.text),
-                    ),
+                    log.metadata != null ? jsonEncode(log.metadata) : log.text,
+                    style: AppTextStyles.monospaceLarge.copyWith(color: _getLogColor(log.text)),
                   ),
                 ),
               ],

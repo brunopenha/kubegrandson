@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../domain/services/kubernetes_service.dart';
@@ -7,12 +9,47 @@ class LogEntry {
   final String text;
   final DateTime timestamp;
   final int lineNumber;
+  final Map<String, dynamic>? metadata;
+  final String? source;
+  final String? level;
 
   LogEntry({
     required this.text,
     required this.timestamp,
     required this.lineNumber,
+    this.metadata,
+    this.source,
+    this.level,
   });
+
+  factory LogEntry.fromRaw(String raw, int lineNumber) {
+    String? prefix;
+    Map<String, dynamic>? parsed;
+    String? level;
+
+    // Split into prefix and JSON
+    final regex = RegExp(r'^\[(.*?)\]\s*(\{.*\})$');
+    final match = regex.firstMatch(raw);
+
+    if (match != null) {
+      prefix = '[${match.group(1)}]';
+      try {
+        parsed = jsonDecode(match.group(2)!);
+        level = parsed?['level']?.toString();
+      } catch (_) {
+        parsed = null;
+      }
+    }
+
+    return LogEntry(
+      text: raw,
+      timestamp: DateTime.now(),
+      lineNumber: lineNumber,
+      metadata: parsed,
+      source: prefix,
+      level: level,
+    );
+  }
 }
 
 class LogState {
@@ -21,6 +58,7 @@ class LogState {
   final String? error;
   final bool autoScroll;
   final String searchQuery;
+  final LogEntry? selectedLogEntry;
 
   LogState({
     this.logs = const [],
@@ -28,6 +66,7 @@ class LogState {
     this.error,
     this.autoScroll = true,
     this.searchQuery = '',
+    this.selectedLogEntry,
   });
 
   LogState copyWith({
@@ -36,6 +75,7 @@ class LogState {
     String? error,
     bool? autoScroll,
     String? searchQuery,
+    LogEntry? selectedLogEntry,
   }) {
     return LogState(
       logs: logs ?? this.logs,
@@ -43,6 +83,7 @@ class LogState {
       error: error,
       autoScroll: autoScroll ?? this.autoScroll,
       searchQuery: searchQuery ?? this.searchQuery,
+      selectedLogEntry: selectedLogEntry ?? this.selectedLogEntry,
     );
   }
 }
@@ -73,11 +114,7 @@ class LogNotifier extends StateNotifier<LogState> {
 
       int lineNumber = 0;
       await for (final logLine in logStream) {
-        final entry = LogEntry(
-          text: logLine,
-          timestamp: DateTime.now(),
-          lineNumber: ++lineNumber,
-        );
+        final entry = LogEntry.fromRaw(logLine, ++lineNumber);
 
         final currentLogs = List<LogEntry>.from(state.logs)..add(entry);
         state = state.copyWith(logs: currentLogs, isLoading: false);
@@ -118,6 +155,11 @@ class LogNotifier extends StateNotifier<LogState> {
     _logsController.close();
     super.dispose();
   }
+
+  void selectLog(LogEntry? logEntry) {
+    state = state.copyWith(selectedLogEntry: logEntry);
+  }
+
 }
 
 final logProvider =
@@ -127,3 +169,12 @@ StateNotifierProvider.family<LogNotifier, LogState, String>(
     return LogNotifier(service);
   },
 );
+String prettyJson(String line) {
+  try {
+    final jsonObj = jsonDecode(line);
+    const encoder = JsonEncoder.withIndent('  ');
+    return encoder.convert(jsonObj);
+  } catch (_) {
+    return line; // not JSON
+  }
+}

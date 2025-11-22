@@ -1,21 +1,39 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:k8s/k8s.dart' as k8s;
+import 'package:path/path.dart' as p;
 import '../../core/utils/app_logger.dart';
 import '../../data/models/kubernetes/pod.dart' as models;
 
 class KubernetesService {
   k8s.ApiClient? _client;
 
-  Future<void> initialize(String kubeconfigPath) async {
+  Future<void> initialize({String? kubeconfigPath}) async {
     try {
       final kubernetes = k8s.Kubernetes();
-      await kubernetes.initFromFile(kubeconfigPath);
+
+      // If no path provided, resolve default ~/.kube/config cross‑platform
+      if (kubeconfigPath == null) {
+        final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+        final defaultPath = p.join(home!, '.kube', 'config');
+        await kubernetes.initFromFile(defaultPath);
+      } else {
+        await kubernetes.initFromFile(kubeconfigPath);
+      }
+
       _client = kubernetes.client;
+      _client!.dio.options
+        ..connectTimeout = const Duration(seconds: 30) // allow more time to connect
+        ..receiveTimeout = Duration.zero;             // disable receive timeout for streaming
 
       final versionApi = k8s.VersionApi(_client!.dio);
       final version = await versionApi.getCode();
 
       AppLogger.info('Kubernetes client initialized');
       AppLogger.info('Version: ${version.data?.gitVersion}');
+      AppLogger.info('KubernetesService.client: $_client');
     } catch (e, stackTrace) {
       AppLogger.error('Failed to initialize Kubernetes client', e, stackTrace);
       rethrow;
@@ -57,13 +75,19 @@ class KubernetesService {
   }
 
   Future<List<String>> fetchNamespaces() async {
-    final api = k8s.CoreV1Api(_client!.dio);
-    final response = await api.listNamespace();
-    return response.data?.items
-        ?.map((ns) => ns.metadata?.name ?? '')
-        .where((name) => name.isNotEmpty)
-        .toList() ??
-        [];
+    print('fetchNamespaces called');
+    final response = await _client?.getCoreV1Api().listNamespace();
+    //print('response: $response');
+    final namespaces = response?.data?.items ?? [];
+    final names = namespaces
+        .map((ns) {
+            final name = ns.metadata?.name ?? '';
+            //print('namespace item: $name');
+            return name;
+          }).toList();
+
+    return names;
+
   }
 
   Future<String> readPodLogs(String namespace, String podName) async {
@@ -86,6 +110,7 @@ class KubernetesService {
     _client = null; // no explicit close needed
   }
 
+
   Stream<String> streamLogs({
     required String namespace,
     required String podName,
@@ -93,14 +118,31 @@ class KubernetesService {
     int? tailLines,
     bool follow = true,
   }) async* {
-    final api = k8s.CoreV1Api(_client!.dio);
-    final response = await api.readNamespacedPodLog(
-      name: podName,
-      namespace: namespace,
-      container: containerName,
-      follow: follow,
-      tailLines: tailLines,
+    final dio = _client!.dio;
+
+    final response = await dio.get<ResponseBody>(
+      '/api/v1/namespaces/$namespace/pods/$podName/log',
+      queryParameters: {
+        if (containerName != null) 'container': containerName,
+        'follow': follow,
+        if (tailLines != null) 'tailLines': tailLines,
+      },
+      options: Options(responseType: ResponseType.stream),
     );
-    yield response.data ?? '';
+
+    final byteStream = response.data!.stream; // Stream<Uint8List>
+
+    // Convert bytes -> String -> lines
+    final lineStream = byteStream
+        .transform(StreamTransformer.fromBind(
+          (s) => s.cast<List<int>>().transform(utf8.decoder),
+    ))
+        .transform(const LineSplitter());
+
+    await for (final line in lineStream) {
+      final formatted = '[${DateTime.now().toIso8601String()}] $line';
+      yield formatted;
+    }
+
   }
 }

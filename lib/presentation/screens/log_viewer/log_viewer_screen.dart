@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../providers/log_provider.dart';
@@ -65,6 +68,12 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
               ),
           ],
         ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            context.go('/');
+          },
+        ),
         actions: [
           IconButton(
             icon: Icon(
@@ -97,42 +106,46 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
           LogSearchBar(podKey: podKey),
           LogFilterToolbar(podKey: podKey),
           Expanded(
-            child: logState.isLoading && logState.logs.isEmpty
-                ? const Center(
-              child: CircularProgressIndicator(),
-            )
-                : logState.error != null
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    color: AppColors.error,
-                    size: 48,
+            child: Column(
+              children: [
+                Expanded(
+                  child: logState.isLoading && logState.logs.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : logState.error != null
+                      ? Center( /* error UI */ )
+                      : LogListView(
+                    podKey: podKey,
+                    scrollController: _scrollController,
+                    positionsListener: _positionsListener,
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error loading logs',
-                    style: AppTextStyles.heading2,
+                ),
+                if (logState.selectedLogEntry?.metadata != null)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Card(
+                      color: AppColors.surfaceDark,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Line: ${logState.selectedLogEntry!.lineNumber}',
+                              style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            if (logState.selectedLogEntry?.metadata != null)
+                              Text(
+                                const JsonEncoder.withIndent('  ')
+                                    .convert(logState.selectedLogEntry!.metadata),
+                                style: const TextStyle(fontFamily: 'monospace'),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    logState.error!,
-                    style: AppTextStyles.bodySmall,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _startLogStreaming,
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            )
-                : LogListView(
-              podKey: podKey,
-              scrollController: _scrollController,
-              positionsListener: _positionsListener,
+              ],
             ),
           ),
           _buildStatusBar(logState),

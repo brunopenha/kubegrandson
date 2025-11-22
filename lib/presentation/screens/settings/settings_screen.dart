@@ -26,8 +26,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _pickKubeconfigFile() async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['yaml', 'yml', 'config'],
+      type: FileType.any,
+      //allowedExtensions: ['yaml', 'yml', 'config'],
       dialogTitle: 'Select Kubeconfig File',
     );
 
@@ -38,7 +38,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       try {
         await ref
             .read(kubernetesServiceProvider)
-            .initialize(path);
+            .initialize(kubeconfigPath: path);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

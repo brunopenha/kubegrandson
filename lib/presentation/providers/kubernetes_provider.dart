@@ -3,6 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/kubernetes/pod.dart';
 import '../../domain/services/kubernetes_service.dart';
 
+final initializeProvider = FutureProvider<void>((ref) async {
+  final service = ref.watch(kubernetesServiceProvider);
+  // Use default path or file picker path
+  await service.initialize();
+});
+
+
 final kubernetesServiceProvider = Provider<KubernetesService>((ref) {
   final service = KubernetesService();
   ref.onDispose(() => service.dispose());
@@ -10,18 +17,18 @@ final kubernetesServiceProvider = Provider<KubernetesService>((ref) {
 });
 
 final namespacesProvider = FutureProvider<List<String>>((ref) async {
+  await ref.watch(initializeProvider.future); // wait until init completes
   final service = ref.watch(kubernetesServiceProvider);
   return service.fetchNamespaces();
 });
 
 final selectedNamespaceProvider = StateProvider<String>((ref) => 'default');
 
-final podsProvider = FutureProvider.family<List<KubePod>, String>(
-  (ref, namespace) async {
-    final service = ref.watch(kubernetesServiceProvider);
-    return service.fetchPods(namespace);
-  },
-);
+final podsProvider = FutureProvider.family<List<KubePod>, String>((ref, ns) async {
+  await ref.watch(initializeProvider.future); // wait until init completes
+  final service = ref.watch(kubernetesServiceProvider);
+  return service.fetchPods(ns);
+});
 
 final currentPodsProvider = FutureProvider<List<KubePod>>((ref) async {
   final namespace = ref.watch(selectedNamespaceProvider);

@@ -105,6 +105,36 @@ Future<void> main(List<String> args) async {
   print('Deployment UID: ${response6.metadata!.uid}');
   */
 
+
+  // cluster version
+  final versionResponse = await versionApi.getCode();
+  print('Cluster version: ${versionResponse.data?.gitVersion}');
+
+  // list all namespaces
+  final nsResponse = await coreV1Api.listNamespace();
+  final namespaces = nsResponse.data?.items ?? [];
+
+  print('\nNamespaces:');
+  for (final ns in namespaces) {
+    final nsName = ns.metadata?.name ?? '<unknown>';
+    print('- $nsName');
+
+    // list pods in this namespace
+    try {
+      final podsResponse = await coreV1Api.listNamespacedPod(namespace: nsName);
+      final pods = podsResponse.data?.items ?? [];
+      if (pods.isEmpty) {
+        print('  (no pods)');
+      } else {
+        for (final pod in pods) {
+          print('  • ${pod.metadata?.name}');
+        }
+      }
+    } on DioException catch (e) {
+      print('  Error listing pods in $nsName: ${e.message}');
+    }
+  }
+
   exit(0);
 }
 
