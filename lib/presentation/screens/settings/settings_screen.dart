@@ -104,7 +104,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                   ),
-                  value: 'default',
+                  initialValue: 'default',
                   items: const [
                     DropdownMenuItem(value: 'default', child: Text('default')),
                     DropdownMenuItem(value: 'kube-system', child: Text('kube-system')),

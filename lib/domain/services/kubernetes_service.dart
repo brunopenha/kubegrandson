@@ -10,13 +10,31 @@ import '../../data/models/kubernetes/pod.dart' as models;
 class KubernetesService {
   k8s.ApiClient? _client;
 
+  final k8s.Kubernetes Function() _kubernetesFactory;
+  final k8s.CoreV1Api Function(Dio dio) _coreV1ApiFactory;
+  final k8s.VersionApi Function(Dio dio) _versionApiFactory;
+  final String? Function() _homeDirResolver;
+
+  KubernetesService({
+    k8s.ApiClient? client,
+    k8s.Kubernetes Function()? kubernetesFactory,
+    k8s.CoreV1Api Function(Dio dio)? coreV1ApiFactory,
+    k8s.VersionApi Function(Dio dio)? versionApiFactory,
+    String? Function()? homeDirResolver,
+  })  : _client = client,
+        _kubernetesFactory = kubernetesFactory ?? (() => k8s.Kubernetes()),
+        _coreV1ApiFactory = coreV1ApiFactory ?? ((dio) => k8s.CoreV1Api(dio)),
+        _versionApiFactory = versionApiFactory ?? ((dio) => k8s.VersionApi(dio)),
+        _homeDirResolver = homeDirResolver ??
+            (() => Platform.environment['HOME'] ?? Platform.environment['USERPROFILE']);
+
   Future<void> initialize({String? kubeconfigPath}) async {
     try {
-      final kubernetes = k8s.Kubernetes();
+      final kubernetes = _kubernetesFactory();
 
       // If no path provided, resolve default ~/.kube/config cross‑platform
       if (kubeconfigPath == null) {
-        final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+        final home = _homeDirResolver();
         final defaultPath = p.join(home!, '.kube', 'config');
         await kubernetes.initFromFile(defaultPath);
       } else {
@@ -26,9 +44,9 @@ class KubernetesService {
       _client = kubernetes.client;
       _client!.dio.options
         ..connectTimeout = const Duration(seconds: 30) // allow more time to connect
-        ..receiveTimeout = Duration.zero;             // disable receive timeout for streaming
+        ..receiveTimeout = Duration.zero; // disable receive timeout for streaming
 
-      final versionApi = k8s.VersionApi(_client!.dio);
+      final versionApi = _versionApiFactory(_client!.dio);
       final version = await versionApi.getCode();
 
       AppLogger.info('Kubernetes client initialized');
@@ -41,7 +59,7 @@ class KubernetesService {
   }
 
   Future<List<models.KubePod>> fetchPods(String namespace) async {
-    final api = k8s.CoreV1Api(_client!.dio);
+    final api = _coreV1ApiFactory(_client!.dio);
     final response = namespace == 'all'
         ? await api.listPodForAllNamespaces()
         : await api.listNamespacedPod(namespace: namespace);
@@ -67,9 +85,8 @@ class KubernetesService {
             state: cs.state,
           );
         }).toList(),
-        restartCount: pod.status?.containerStatuses
-            ?.fold(0, (sum, cs) => sum! + cs.restartCount) ??
-            0,
+        restartCount:
+            pod.status?.containerStatuses?.fold(0, (sum, cs) => sum! + cs.restartCount) ?? 0,
       );
     }).toList();
   }
@@ -77,21 +94,16 @@ class KubernetesService {
   Future<List<String>> fetchNamespaces() async {
     print('fetchNamespaces called');
     final response = await _client?.getCoreV1Api().listNamespace();
-    //print('response: $response');
     final namespaces = response?.data?.items ?? [];
-    final names = namespaces
-        .map((ns) {
-            final name = ns.metadata?.name ?? '';
-            //print('namespace item: $name');
-            return name;
-          }).toList();
-
+    final names = namespaces.map((ns) {
+      final name = ns.metadata?.name ?? '';
+      return name;
+    }).toList();
     return names;
-
   }
 
   Future<String> readPodLogs(String namespace, String podName) async {
-    final api = k8s.CoreV1Api(_client!.dio);
+    final api = _coreV1ApiFactory(_client!.dio);
     final response = await api.readNamespacedPodLog(
       name: podName,
       namespace: namespace,
@@ -101,7 +113,7 @@ class KubernetesService {
   }
 
   Future<void> deletePod(String namespace, String podName) async {
-    final api = k8s.CoreV1Api(_client!.dio);
+    final api = _coreV1ApiFactory(_client!.dio);
     await api.deleteNamespacedPod(name: podName, namespace: namespace);
     AppLogger.info('Deleted pod: $namespace/$podName');
   }
@@ -109,7 +121,6 @@ class KubernetesService {
   void dispose() {
     _client = null; // no explicit close needed
   }
-
 
   Stream<String> streamLogs({
     required String namespace,
@@ -136,13 +147,12 @@ class KubernetesService {
     final lineStream = byteStream
         .transform(StreamTransformer.fromBind(
           (s) => s.cast<List<int>>().transform(utf8.decoder),
-    ))
+        ))
         .transform(const LineSplitter());
 
     await for (final line in lineStream) {
       final formatted = '[${DateTime.now().toIso8601String()}] $line';
       yield formatted;
     }
-
   }
 }

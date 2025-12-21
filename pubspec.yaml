@@ -25,7 +25,7 @@ dependencies:
 
   # HTTP & WebSocket
   http: ^1.1.0
-  web_socket_channel: ^2.4.0
+  web_socket_channel: ^3.0.3
 
   # YAML & JSON Processing
   yaml: ^3.1.2
@@ -41,20 +41,20 @@ dependencies:
   # UI Components
   flutter_svg: ^2.0.9
   google_fonts: ^6.1.0
-  flutter_markdown: ^0.6.18
+  flutter_markdown: ^0.7.7+1
   scrollable_positioned_list: ^0.3.8
 
   # Desktop Support
-  window_manager: ^0.3.7
-  file_picker: ^6.1.1
+  window_manager: ^0.5.1
+  file_picker: ^10.3.7
 
   # Utilities
-  intl: ^0.18.1
+  intl: ^0.20.2
   equatable: ^2.0.5
-  freezed_annotation: ^2.4.1
+  freezed_annotation: ^3.1.0
   path_provider: ^2.1.1
   collection: ^1.18.0
-  go_router: ^12.1.3
+  go_router: ^17.0.0
 
   # JSON Viewer
   flutter_json_view: ^1.1.3
@@ -64,21 +64,23 @@ dependencies:
 
   # Async utilities
   async: ^2.11.0
-  rxdart: ^0.27.7
+  rxdart: ^0.28.0
 
   path: any
+  dio: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   build_runner: ^2.4.7
   json_serializable: ^6.7.1
-  freezed: ^2.4.6
-
+  freezed: ^3.2.3
+  mocktail: ^1.0.4
   integration_test:
     sdk: flutter
 
+  dio: any
 flutter:
   uses-material-design: true
 
