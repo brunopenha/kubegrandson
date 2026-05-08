@@ -10,6 +10,7 @@ class KubeGrandsonApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
@@ -17,6 +18,21 @@ class KubeGrandsonApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
+      // themeMode: ThemeMode.system,
+      // theme: ThemeData(
+      //   useMaterial3: true,
+      //   colorScheme: ColorScheme.fromSeed(
+      //     seedColor: Colors.deepPurple,
+      //     brightness: Brightness.light,
+      //   ),
+      // ),
+      // darkTheme: ThemeData(
+      //   useMaterial3: true,
+      //   colorScheme: ColorScheme.fromSeed(
+      //     seedColor: Colors.deepPurple,
+      //     brightness: Brightness.dark,
+      //   ),
+      // ),
       themeMode: themeMode,
       routerConfig: AppRouter.router,
     );

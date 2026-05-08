@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:yaml/yaml.dart';
 
 class AppConfig {
   static AppConfig? _instance;
+  static String? _appVersion;
 
   late String kubeConfigPath;
   late String appDataPath;
@@ -20,7 +23,8 @@ class AppConfig {
 
   Future<void> _initialize() async {
     // Set default kubeconfig path
-    final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+    final home =
+        Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
     kubeConfigPath = path.join(home ?? '', '.kube', 'config');
 
     // Set app data path
@@ -38,11 +42,28 @@ class AppConfig {
     return path.join(appDataPath, 'app.log');
   }
 
+  static Future<String> getAppVersion() async {
+    if (_appVersion != null) {
+      return _appVersion!;
+    }
 
-  static const String version = '1.0.0';
+    try {
+      final pubspec = await rootBundle.loadString('pubspec.yaml');
+      final yaml = loadYaml(pubspec) as YamlMap;
+      final version = yaml['version'] as String? ?? appVersionFallback;
+      _appVersion = version.split('+').first;
+    } catch (_) {
+      _appVersion = appVersionFallback;
+    }
+
+    return _appVersion!;
+  }
+
+  static const String appVersionFallback = '0.0.1';
   static const String appName = 'Kubegrandson';
   static const String vendor = 'Bruno Penha';
-  static const String description = 'Kubegrandson Kubernetes log viewer - Grandson of Kubeson';
+  static const String description =
+      'Kubegrandson Kubernetes log viewer - Grandson of Kubeson';
   static const String parentApp = 'Kubeson';
   static const String parentVersion = '2.3.2';
 

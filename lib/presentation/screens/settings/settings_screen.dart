@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../providers/theme/app_colors.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/kubernetes_provider.dart';
@@ -17,6 +19,9 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final TextEditingController _kubeconfigController = TextEditingController();
+  Future<void>? _launched;
+  final Uri toLaunch =
+  Uri(scheme: 'https', host: 'github.com', path: 'brunopenha/kubegrandson/releases');
 
   @override
   void dispose() {
@@ -64,17 +69,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
+    final autoRefreshInterval = ref.watch(autoRefreshIntervalSecondsProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text('Settings'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
             context.go('/');
           },
         ),
-
       ),
       body: ListView(
         padding: const EdgeInsets.all(24),
@@ -99,6 +104,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               _buildSetting(
+                'Auto-refresh',
+                DropdownButtonFormField<int>(
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    helperText:
+                        'Refresh namespaces, pods, services, and configmaps',
+                  ),
+                  initialValue: autoRefreshInterval,
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('Off')),
+                    DropdownMenuItem(value: 5, child: Text('Every 5 seconds')),
+                    DropdownMenuItem(
+                        value: 10, child: Text('Every 10 seconds')),
+                    DropdownMenuItem(
+                        value: 30, child: Text('Every 30 seconds')),
+                    DropdownMenuItem(
+                        value: 60, child: Text('Every 60 seconds')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      ref
+                          .read(autoRefreshIntervalSecondsProvider.notifier)
+                          .state = value;
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildSetting(
                 'Default Namespace',
                 DropdownButtonFormField<String>(
                   decoration: const InputDecoration(
@@ -107,12 +141,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   initialValue: 'default',
                   items: const [
                     DropdownMenuItem(value: 'default', child: Text('default')),
-                    DropdownMenuItem(value: 'kube-system', child: Text('kube-system')),
-                    DropdownMenuItem(value: 'all', child: Text('All Namespaces')),
+                    DropdownMenuItem(
+                        value: 'kube-system', child: Text('kube-system'))
                   ],
                   onChanged: (value) {
                     if (value != null) {
-                      ref.read(selectedNamespaceProvider.notifier).state = value;
+                      ref.read(selectedNamespaceProvider.notifier).state =
+                          value;
                     }
                   },
                 ),
@@ -129,6 +164,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   children: [
                     Expanded(
                       child: SegmentedButton<ThemeMode>(
+                        style: SegmentedButton.styleFrom(
+                          selectedForegroundColor:
+                              Theme.of(context).colorScheme.onSecondary,
+                          selectedBackgroundColor:
+                              Theme.of(context).colorScheme.secondary,
+                        ),
                         segments: const [
                           ButtonSegment(
                             value: ThemeMode.light,
@@ -204,22 +245,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             'About',
             [
               ListTile(
+                title: const Text('Author'),
+                subtitle: const Text('Bruno C. Penha'),
+                trailing: const Icon(Icons.info_outline),
+              ),
+              ListTile(
                 title: const Text('Version'),
-                subtitle: const Text('2.3.2'),
+                subtitle: FutureBuilder<String>(
+                  future: AppConfig.getAppVersion(),
+                  builder: (context, snapshot) {
+                    return Text(
+                      snapshot.data ?? AppConfig.appVersionFallback,
+                    );
+                  },
+                ),
                 trailing: const Icon(Icons.info_outline),
               ),
               ListTile(
                 title: const Text('License'),
-                subtitle: const Text('MIT License'),
+                subtitle: const Text('Apache-2.0 license'),
                 trailing: const Icon(Icons.description),
               ),
               ListTile(
-                title: const Text('GitHub'),
-                subtitle: const Text('View source code'),
+                title: const Text('Releases'),
+                subtitle: const Text('Get the last release on our GitHub page'),
                 trailing: const Icon(Icons.open_in_new),
-                onTap: () {
-                  // TODO: Open GitHub URL
-                },
+                onTap: () => setState(() {
+                  _launched = _launchInBrowser(toLaunch);
+                }),
               ),
             ],
           ),
@@ -237,7 +290,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             Text(
               title,
-              style: AppTextStyles.heading2,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 20,
+                  ),
+              //style: AppTextStyles.heading2,
             ),
             const SizedBox(height: 16),
             ...children,
@@ -255,11 +313,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           label,
           style: AppTextStyles.bodyMedium.copyWith(
             fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
         const SizedBox(height: 8),
         child,
       ],
     );
+  }
+
+  Future<void> _launchInBrowser(Uri url) async {
+    if (!await launchUrl(
+      url,
+      mode: LaunchMode.externalApplication,
+    )) {
+      throw Exception('Could not launch $url');
+    }
   }
 }

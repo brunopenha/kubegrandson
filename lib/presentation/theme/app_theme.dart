@@ -8,26 +8,27 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.backgroundLight,
-      colorScheme: ColorScheme.light(
-        primary: AppColors.primary,
+      colorScheme: const ColorScheme.light(
+        primary: AppColors.primaryLight,
+        onPrimary: Colors.white,
         secondary: AppColors.secondary,
+        onSecondary: Colors.white,
         surface: AppColors.surfaceLight,
+        onSurface: AppColors.textPrimaryLight,
         error: AppColors.error,
+        onError: Colors.white,
       ),
-      textTheme: AppTextStyles.textTheme,
-      appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.surfaceLight,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
-        titleTextStyle: AppTextStyles.heading2,
+
+      textTheme: const TextTheme(
+        bodyLarge: TextStyle(color: AppColors.textPrimaryLight),
+        bodyMedium: TextStyle(color: AppColors.textPrimaryLight),
+        titleMedium: TextStyle(color: AppColors.textPrimaryLight),
       ),
-      cardTheme: CardThemeData(
-        color: AppColors.surfaceLight,
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: AppColors.border, width: 1),
-        ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceLight,
+        border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.borderLight)),
+        labelStyle: const TextStyle(color: AppColors.textPrimaryLight),
       ),
     );
   }
@@ -37,26 +38,26 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.backgroundDark,
-      colorScheme: ColorScheme.dark(
-        primary: AppColors.primary,
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.primaryDark,
+        onPrimary: Colors.white,
         secondary: AppColors.secondary,
+        onSecondary: Colors.white,
         surface: AppColors.surfaceDark,
+        onSurface: AppColors.textPrimary,
         error: AppColors.error,
+        onError: Colors.white,
       ),
-      textTheme: AppTextStyles.textTheme,
-      appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.surfaceDark,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
-        titleTextStyle: AppTextStyles.heading2,
+      textTheme: const TextTheme(
+        bodyLarge: TextStyle(color: AppColors.textPrimary),
+        bodyMedium: TextStyle(color: AppColors.textPrimary),
+        titleMedium: TextStyle(color: AppColors.textPrimary),
       ),
-      cardTheme: CardThemeData(
-        color: AppColors.surfaceDark,
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: AppColors.border, width: 1),
-        ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceDark,
+        border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+        labelStyle: const TextStyle(color: AppColors.textPrimary),
       ),
     );
   }

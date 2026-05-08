@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../providers/log_provider.dart';
 import '../../../providers/theme/app_colors.dart';
 import '../../../widgets/common/tab_pill.dart';
 
 enum LogLevelFilter implements TabPillButtonConfig {
   all('All', null, Icons.list),
-  error('Error', 'error-level', Icons.error),
-  warning('Warning', 'warning-level', Icons.warning),
+  trace('Trace', 'trace-level', Icons.bug_report_sharp),
+  debug('Debug', 'debug-level', Icons.bug_report_outlined),
   info('Info', 'info-level', Icons.info),
-  debug('Debug', 'debug-level', Icons.bug_report);
+  warning('Warning', 'warning-level', Icons.warning),
+  error('Error', 'error-level', Icons.error),
+  fatal('Fatal', 'fatal-level', Icons.error_outline);
 
   final String _text;
   final String? _styleClass;
@@ -37,6 +40,9 @@ class LogFilterToolbar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final logState = ref.watch(logProvider(podKey));
+    final logNotifier = ref.read(logProvider(podKey).notifier);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -54,15 +60,41 @@ class LogFilterToolbar extends ConsumerWidget {
             orientation: TabPillOrientation.horizontal,
             minButtonWidth: 50,
             onButtonToggled: (key, selected) {
-              // TODO: Implement log level filtering
-              print('Filter: ${key.text} - $selected');
+              switch(key){
+                case LogLevelFilter.trace:
+                  logNotifier.setTraceFilter(selected);
+                  break;
+                case LogLevelFilter.debug:
+                  logNotifier.setDebugFilter(selected);
+                  break;
+                case LogLevelFilter.warning:
+                  logNotifier.setWarnFilter(selected);
+                  break;
+                case LogLevelFilter.error:
+                  logNotifier.setErrorFilter(selected);
+                  break;
+                case LogLevelFilter.fatal:
+                  logNotifier.setFatalFilter(selected);
+                  break;
+                case LogLevelFilter.info:
+                  logNotifier.setInfoFilter(selected);
+                  break;
+                case LogLevelFilter.all:
+                  logNotifier.setInfoFilter(selected);
+                  logNotifier.setWarnFilter(selected);
+                  logNotifier.setErrorFilter(selected);
+                  logNotifier.setFatalFilter(selected);
+                  logNotifier.setTraceFilter(selected);
+                  logNotifier.setDebugFilter(selected);
+                  break;
+              }
             },
           ),
           const Spacer(),
           Checkbox(
-            value: false, // TODO: Connect to provider
+            value: logState.showTimestamps,
             onChanged: (value) {
-              // TODO: Toggle timestamp display
+              logNotifier.setShowTimestamps(value ?? false);
             },
           ),
           const Text('Show Timestamps'),

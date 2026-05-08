@@ -5,7 +5,9 @@ import 'package:dio/dio.dart';
 import 'package:k8s/k8s.dart' as k8s;
 import 'package:path/path.dart' as p;
 import '../../core/utils/app_logger.dart';
+import '../../data/models/kubernetes/config_map.dart' as config_maps;
 import '../../data/models/kubernetes/pod.dart' as models;
+import '../../data/models/kubernetes/service.dart' as services;
 
 class KubernetesService {
   k8s.ApiClient? _client;
@@ -24,9 +26,12 @@ class KubernetesService {
   })  : _client = client,
         _kubernetesFactory = kubernetesFactory ?? (() => k8s.Kubernetes()),
         _coreV1ApiFactory = coreV1ApiFactory ?? ((dio) => k8s.CoreV1Api(dio)),
-        _versionApiFactory = versionApiFactory ?? ((dio) => k8s.VersionApi(dio)),
+        _versionApiFactory =
+            versionApiFactory ?? ((dio) => k8s.VersionApi(dio)),
         _homeDirResolver = homeDirResolver ??
-            (() => Platform.environment['HOME'] ?? Platform.environment['USERPROFILE']);
+            (() =>
+                Platform.environment['HOME'] ??
+                Platform.environment['USERPROFILE']);
 
   Future<void> initialize({String? kubeconfigPath}) async {
     try {
@@ -43,8 +48,10 @@ class KubernetesService {
 
       _client = kubernetes.client;
       _client!.dio.options
-        ..connectTimeout = const Duration(seconds: 30) // allow more time to connect
-        ..receiveTimeout = Duration.zero; // disable receive timeout for streaming
+        ..connectTimeout =
+            const Duration(seconds: 30) // allow more time to connect
+        ..receiveTimeout =
+            Duration.zero; // disable receive timeout for streaming
 
       final versionApi = _versionApiFactory(_client!.dio);
       final version = await versionApi.getCode();
@@ -85,14 +92,73 @@ class KubernetesService {
             state: cs.state,
           );
         }).toList(),
-        restartCount:
-            pod.status?.containerStatuses?.fold(0, (sum, cs) => sum! + cs.restartCount) ?? 0,
+        restartCount: pod.status?.containerStatuses
+                ?.fold(0, (sum, cs) => sum! + cs.restartCount) ??
+            0,
+      );
+    }).toList();
+  }
+
+  Future<List<services.KubeService>> fetchServices(String namespace) async {
+    final api = _coreV1ApiFactory(_client!.dio);
+    final response = namespace == 'all'
+        ? await api.listServiceForAllNamespaces()
+        : await api.listNamespacedService(namespace: namespace);
+
+    final items = response.data?.items ?? [];
+    return items.map((service) {
+      final serviceNamespace = service.metadata?.namespace ?? namespace;
+      final ports = service.spec?.ports?.map((port) {
+        return services.ServicePort(
+          name: port.name ?? '',
+          port: port.port,
+          targetPort: int.tryParse('${port.targetPort}') ?? port.port,
+          protocol: port.protocol ?? 'TCP',
+          nodePort: port.nodePort,
+        );
+      }).toList();
+
+      return services.KubeService(
+        name: service.metadata?.name ?? 'Unknown',
+        namespace: serviceNamespace,
+        uid: service.metadata?.uid,
+        type: service.spec?.type ?? 'ClusterIP',
+        clusterIP: service.spec?.clusterIP,
+        externalIPs: service.spec?.externalIPs,
+        ports: ports,
+        creationTimestamp: service.metadata?.creationTimestamp,
+        labels: service.metadata?.labels?.cast<String, String>(),
+        annotations: service.metadata?.annotations?.cast<String, String>(),
+        selector: service.spec?.selector?.cast<String, String>(),
+      );
+    }).toList();
+  }
+
+  Future<List<config_maps.KubeConfigMap>> fetchConfigMaps(
+    String namespace,
+  ) async {
+    final api = _coreV1ApiFactory(_client!.dio);
+    final response = namespace == 'all'
+        ? await api.listConfigMapForAllNamespaces()
+        : await api.listNamespacedConfigMap(namespace: namespace);
+
+    final items = response.data?.items ?? [];
+    return items.map((configMap) {
+      return config_maps.KubeConfigMap(
+        name: configMap.metadata?.name ?? 'Unknown',
+        namespace: configMap.metadata?.namespace ?? namespace,
+        uid: configMap.metadata?.uid,
+        creationTimestamp: configMap.metadata?.creationTimestamp,
+        labels: configMap.metadata?.labels?.cast<String, String>(),
+        annotations: configMap.metadata?.annotations?.cast<String, String>(),
+        data: configMap.data?.cast<String, String>(),
+        binaryData: configMap.binaryData?.cast<String, String>(),
       );
     }).toList();
   }
 
   Future<List<String>> fetchNamespaces() async {
-    print('fetchNamespaces called');
+    AppLogger.info('Fetching namespaces');
     final response = await _client?.getCoreV1Api().listNamespace();
     final namespaces = response?.data?.items ?? [];
     final names = namespaces.map((ns) {

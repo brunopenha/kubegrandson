@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/models/kubernetes/config_map.dart';
 import '../../data/models/kubernetes/pod.dart';
+import '../../data/models/kubernetes/service.dart';
 import '../../domain/services/kubernetes_service.dart';
 
 final initializeProvider = FutureProvider<void>((ref) async {
@@ -8,7 +12,6 @@ final initializeProvider = FutureProvider<void>((ref) async {
   // Use default path or file picker path
   await service.initialize();
 });
-
 
 final kubernetesServiceProvider = Provider<KubernetesService>((ref) {
   final service = KubernetesService();
@@ -24,15 +27,59 @@ final namespacesProvider = FutureProvider<List<String>>((ref) async {
 
 final selectedNamespaceProvider = StateProvider<String>((ref) => 'default');
 
-final podsProvider = FutureProvider.family<List<KubePod>, String>((ref, ns) async {
+final selectedPodNamesProvider = StateProvider<Set<String>>((ref) => {});
+
+final autoRefreshIntervalSecondsProvider = StateProvider<int>((ref) => 10);
+
+final podsProvider =
+    FutureProvider.family<List<KubePod>, String>((ref, ns) async {
   await ref.watch(initializeProvider.future); // wait until init completes
   final service = ref.watch(kubernetesServiceProvider);
   return service.fetchPods(ns);
 });
 
+final servicesProvider =
+    FutureProvider.family<List<KubeService>, String>((ref, ns) async {
+  await ref.watch(initializeProvider.future); // wait until init completes
+  final service = ref.watch(kubernetesServiceProvider);
+  return service.fetchServices(ns);
+});
+
+final configMapsProvider =
+    FutureProvider.family<List<KubeConfigMap>, String>((ref, ns) async {
+  await ref.watch(initializeProvider.future); // wait until init completes
+  final service = ref.watch(kubernetesServiceProvider);
+  return service.fetchConfigMaps(ns);
+});
+
 final currentPodsProvider = FutureProvider<List<KubePod>>((ref) async {
   final namespace = ref.watch(selectedNamespaceProvider);
   return ref.watch(podsProvider(namespace).future);
+});
+
+void refreshKubernetesResources(dynamic ref) {
+  final namespace = ref.read(selectedNamespaceProvider);
+  ref.invalidate(namespacesProvider);
+  ref.invalidate(podsProvider(namespace));
+  ref.invalidate(servicesProvider(namespace));
+  ref.invalidate(configMapsProvider(namespace));
+  ref.invalidate(currentPodsProvider);
+}
+
+void refreshCurrentPods(WidgetRef ref) {
+  refreshKubernetesResources(ref);
+}
+
+final autoRefreshProvider = Provider<void>((ref) {
+  final intervalSeconds = ref.watch(autoRefreshIntervalSecondsProvider);
+  if (intervalSeconds <= 0) return;
+
+  final timer = Timer.periodic(
+    Duration(seconds: intervalSeconds),
+    (_) => refreshKubernetesResources(ref),
+  );
+
+  ref.onDispose(timer.cancel);
 });
 
 class PodFilterState {

@@ -15,12 +15,14 @@ import 'widgets/filter_toolbar.dart';
 class LogViewerScreen extends ConsumerStatefulWidget {
   final String namespace;
   final String podName;
+  final List<String> podNames;
   final String? containerName;
 
   const LogViewerScreen({
     super.key,
     required this.namespace,
     required this.podName,
+    this.podNames = const [],
     this.containerName,
   });
 
@@ -31,7 +33,7 @@ class LogViewerScreen extends ConsumerStatefulWidget {
 class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
   final ItemScrollController _scrollController = ItemScrollController();
   final ItemPositionsListener _positionsListener =
-  ItemPositionsListener.create();
+      ItemPositionsListener.create();
 
   @override
   void initState() {
@@ -42,34 +44,46 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
   }
 
   void _startLogStreaming() {
-    final podKey = '${widget.namespace}/${widget.podName}';
-    ref.read(logProvider(podKey).notifier).startStreaming(
-      namespace: widget.namespace,
-      podName: widget.podName,
-      containerName: widget.containerName,
-    );
+    final podKey = _podKey;
+    ref.read(logProvider(podKey).notifier).startStreamingForPods(
+          namespace: widget.namespace,
+          podNames: _podNames,
+          containerName: widget.containerName,
+        );
   }
 
   @override
   Widget build(BuildContext context) {
-    final podKey = '${widget.namespace}/${widget.podName}';
+    final podKey = _podKey;
     final logState = ref.watch(logProvider(podKey));
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
+        backgroundColor: const Color(0xff404040),
+        foregroundColor: Colors.white,
+        toolbarHeight: 42,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Logs: ${widget.podName}'),
+            Text(
+              _podNames.length == 1
+                  ? 'Logs: ${_podNames.first}'
+                  : 'Logs: ${_podNames.length} pods',
+              style: const TextStyle(fontSize: 12),
+            ),
             if (widget.containerName != null)
               Text(
                 'Container: ${widget.containerName}',
-                style: AppTextStyles.bodySmall,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: Colors.white70,
+                  fontSize: 10,
+                ),
               ),
           ],
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, size: 18),
           onPressed: () {
             context.go('/');
           },
@@ -78,22 +92,27 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
           IconButton(
             icon: Icon(
               logState.autoScroll ? Icons.pause : Icons.play_arrow,
-              color: AppColors.textPrimary,
+              color: Colors.white70,
+              size: 20,
             ),
             onPressed: () {
               ref.read(logProvider(podKey).notifier).toggleAutoScroll();
             },
-            tooltip: logState.autoScroll ? 'Pause Auto-scroll' : 'Resume Auto-scroll',
+            tooltip: logState.autoScroll
+                ? 'Pause Auto-scroll'
+                : 'Resume Auto-scroll',
           ),
           IconButton(
-            icon: const Icon(Icons.download),
+            icon: const Icon(Icons.download, size: 20),
+            color: Colors.redAccent,
             onPressed: () {
               // TODO: Export logs
             },
             tooltip: 'Export Logs',
           ),
           IconButton(
-            icon: const Icon(Icons.clear_all),
+            icon: const Icon(Icons.clear_all, size: 20),
+            color: Colors.white70,
             onPressed: () {
               ref.read(logProvider(podKey).notifier).clearLogs();
             },
@@ -106,46 +125,87 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
           LogSearchBar(podKey: podKey),
           LogFilterToolbar(podKey: podKey),
           Expanded(
-            child: Column(
-              children: [
-                Expanded(
-                  child: logState.isLoading && logState.logs.isEmpty
-                      ? const Center(child: CircularProgressIndicator())
-                      : logState.error != null
-                      ? Center( /* error UI */ )
-                      : LogListView(
-                    podKey: podKey,
-                    scrollController: _scrollController,
-                    positionsListener: _positionsListener,
+            child: Container(
+              color: Colors.black,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: logState.isLoading && logState.logs.isEmpty
+                        ? const Center(child: CircularProgressIndicator())
+                        : logState.error != null
+                            ? Center(/* error UI */)
+                            : LogListView(
+                                podKey: podKey,
+                                scrollController: _scrollController,
+                                positionsListener: _positionsListener,
+                              ),
                   ),
-                ),
-                if (logState.selectedLogEntry?.metadata != null)
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Card(
-                      color: AppColors.surfaceDark,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
+                  if (logState.selectedLogEntry?.metadata != null)
+                    SizedBox(
+                      width: 460,
+                      child: DecoratedBox(
+                        decoration: const BoxDecoration(
+                          color: Color(0xff111111),
+                          border: Border(
+                            left: BorderSide(color: Color(0xff2b2b2b)),
+                          ),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Line: ${logState.selectedLogEntry!.lineNumber}',
-                              style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            if (logState.selectedLogEntry?.metadata != null)
-                              Text(
-                                const JsonEncoder.withIndent('  ')
-                                    .convert(logState.selectedLogEntry!.metadata),
-                                style: const TextStyle(fontFamily: 'monospace'),
+                            Container(
+                              height: 36,
+                              padding:
+                                  const EdgeInsets.only(left: 12, right: 4),
+                              decoration: const BoxDecoration(
+                                color: Color(0xff1b1b1b),
+                                border: Border(
+                                  bottom: BorderSide(color: Color(0xff2b2b2b)),
+                                ),
                               ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'Line: ${logState.selectedLogEntry!.lineNumber}',
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  IconButton(
+                                    icon: const Icon(Icons.close, size: 18),
+                                    color: Colors.white70,
+                                    tooltip: 'Close JSON',
+                                    onPressed: () {
+                                      ref
+                                          .read(logProvider(podKey).notifier)
+                                          .selectLog(null);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.all(12),
+                                child: SelectableText(
+                                  const JsonEncoder.withIndent('  ').convert(
+                                      logState.selectedLogEntry!.metadata),
+                                  style: const TextStyle(
+                                    fontFamily: 'RobotoMono',
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
           _buildStatusBar(logState),
@@ -155,7 +215,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
   }
 
   Widget _buildStatusBar(LogState logState) {
-    final notifier = ref.read(logProvider('${widget.namespace}/${widget.podName}').notifier);
+    final notifier = ref.read(logProvider(_podKey).notifier);
     final filteredCount = notifier.filteredLogs.length;
     final totalCount = logState.logs.length;
 
@@ -193,4 +253,9 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
       ),
     );
   }
+
+  List<String> get _podNames =>
+      widget.podNames.isEmpty ? [widget.podName] : widget.podNames;
+
+  String get _podKey => '${widget.namespace}/${_podNames.join(',')}';
 }

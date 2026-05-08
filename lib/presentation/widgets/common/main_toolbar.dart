@@ -46,7 +46,7 @@ class MainToolbar extends ConsumerWidget {
               color: AppColors.textPrimary,
             ),
             onPressed: () {
-              ref.invalidate(currentPodsProvider);
+              refreshCurrentPods(ref);
             },
             tooltip: 'Refresh',
           ),

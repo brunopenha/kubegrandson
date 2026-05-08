@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Base colors matching JavaFX theme
+  // Base colors matching Kubeson theme
   static const Color backgroundDark = Color(0xFF3C3F41);  // RGB(60, 63, 65)
   static const Color backgroundLight = Color(0xFFF5F5F5);
 
@@ -13,13 +13,16 @@ class AppColors {
 
   // Primary colors
   static const Color primary = Color(0xFF4A90E2);
-  static const Color primaryDark = Color(0xFF357ABD);
+  static const Color primaryDark = Color (0xFFFFFFFF);
+  static const Color primaryLight = Color(0xFF000000);
   static const Color secondary = Color(0xFF50C878);
 
   // Text colors
   static const Color textPrimary = Color(0xFFFFFFFF);
+  static const Color textPrimaryLight = Color(0xFF000000);
   static const Color textSecondary = Color(0xFFB0B0B0);
-  static const Color textLight = Color(0xFF212121);
+  static const Color textLight = Color(0xFF000000);
+  static const Color textDark = Color(0xFFFFFFFF);
 
   // Status colors
   static const Color success = Color(0xFF4CAF50);

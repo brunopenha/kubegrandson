@@ -17,11 +17,17 @@ class AppRouter {
         builder: (context, state) {
           final namespace = state.pathParameters['namespace']!;
           final pod = state.pathParameters['pod']!;
+          final pods = state.uri.queryParameters['pods']
+              ?.split(',')
+              .where((value) => value.isNotEmpty)
+              .map(Uri.decodeComponent)
+              .toList();
           final container = state.uri.queryParameters['container'];
 
           return LogViewerScreen(
             namespace: namespace,
             podName: pod,
+            podNames: pods ?? [pod],
             containerName: container,
           );
         },

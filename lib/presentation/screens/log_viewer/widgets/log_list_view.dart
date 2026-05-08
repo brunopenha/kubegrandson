@@ -6,8 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../providers/log_provider.dart';
-import '../../../providers/theme/app_colors.dart';
-import '../../../theme/app_text_styles.dart';
 
 class LogListView extends ConsumerStatefulWidget {
   final String podKey;
@@ -26,8 +24,6 @@ class LogListView extends ConsumerStatefulWidget {
 }
 
 class _LogListViewState extends ConsumerState<LogListView> {
-  int? _selectedLineIndex;
-
   @override
   void initState() {
     super.initState();
@@ -64,6 +60,7 @@ class _LogListViewState extends ConsumerState<LogListView> {
   @override
   Widget build(BuildContext context) {
     final logNotifier = ref.read(logProvider(widget.podKey).notifier);
+    final logState = ref.watch(logProvider(widget.podKey));
     final logs = logNotifier.filteredLogs;
 
     if (logs.isEmpty) {
@@ -78,46 +75,73 @@ class _LogListViewState extends ConsumerState<LogListView> {
       itemPositionsListener: widget.positionsListener,
       itemBuilder: (context, index) {
         final log = logs[index];
-        final selected = ref.watch(logProvider(widget.podKey)).selectedLogEntry;
+        final selected = logState.selectedLogEntry;
         final isSelected = selected == log;
 
         return InkWell(
           onTap: () {
-            ref.read(logProvider(widget.podKey).notifier).selectLog(isSelected ? null : log);
+            ref
+                .read(logProvider(widget.podKey).notifier)
+                .selectLog(isSelected ? null : log);
           },
           onSecondaryTap: () {
             _showContextMenu(context, log.text);
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            color: isSelected
-                ? AppColors.primary.withOpacity(0.2)
-                : index.isEven
-                ? Colors.transparent
-                : AppColors.backgroundDark.withOpacity(0.3),
+            height: 17,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xff17395c) : Colors.black,
+              border: const Border(
+                bottom: BorderSide(
+                  color: Color(0xff171717),
+                  width: 1,
+                ),
+              ),
+            ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 SizedBox(
-                  width: 60,
+                  width: 38,
                   child: Text(
                     '${log.lineNumber}',
-                    style: AppTextStyles.monospaceSmall.copyWith(color: AppColors.textSecondary),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: Color(0xff168a17),
+                      fontSize: 10,
+                      height: 1,
+                      fontFamily: 'RobotoMono',
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 200,
-                  child: Text(
-                    log.source ?? '',
-                    style: AppTextStyles.monospaceSmall.copyWith(color: AppColors.textSecondary),
+                const SizedBox(width: 6),
+                if (log.source != null) ...[
+                  SizedBox(
+                    width: 180,
+                    child: Text(
+                      log.source!,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xff7aa2f7),
+                        fontSize: 10,
+                        height: 1,
+                        fontFamily: 'RobotoMono',
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
+                  const SizedBox(width: 6),
+                ],
                 Expanded(
                   child: SelectableText(
-                    log.metadata != null ? jsonEncode(log.metadata) : log.text,
-                    style: AppTextStyles.monospaceLarge.copyWith(color: _getLogColor(log.text)),
+                    _formatLogLine(log, logState.showTimestamps),
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: _getLogColor(log.text),
+                      fontSize: 10,
+                      height: 1,
+                      fontFamily: 'RobotoMono',
+                    ),
                   ),
                 ),
               ],
@@ -128,18 +152,25 @@ class _LogListViewState extends ConsumerState<LogListView> {
     );
   }
 
+  String _formatLogLine(LogEntry log, bool showTimestamp) {
+    final message = log.metadata != null ? jsonEncode(log.metadata) : log.text;
+    if (!showTimestamp) return message;
+
+    return '${log.timestamp.toIso8601String()} $message';
+  }
+
   Color _getLogColor(String logText) {
     final lowerText = logText.toLowerCase();
     if (lowerText.contains('error') || lowerText.contains('fatal')) {
-      return AppColors.error;
+      return const Color(0xffff5f56);
     } else if (lowerText.contains('warn')) {
-      return AppColors.warning;
-    } else if (lowerText.contains('info')) {
-      return AppColors.info;
+      return const Color(0xffffd84a);
+    } else if (lowerText.contains('info') || lowerText.contains('note')) {
+      return const Color(0xffd7d7d7);
     } else if (lowerText.contains('debug')) {
-      return AppColors.textSecondary;
+      return const Color(0xff8ab4f8);
     }
-    return AppColors.textPrimary;
+    return const Color(0xffbdbdbd);
   }
 
   void _showContextMenu(BuildContext context, String text) {
@@ -162,9 +193,8 @@ class _LogListViewState extends ConsumerState<LogListView> {
           child: const Text('Copy All'),
           onTap: () {
             final notifier = ref.read(logProvider(widget.podKey).notifier);
-            final allLogs = notifier.filteredLogs
-                .map((log) => log.text)
-                .join('\n');
+            final allLogs =
+                notifier.filteredLogs.map((log) => log.text).join('\n');
             Clipboard.setData(ClipboardData(text: allLogs));
           },
         ),
