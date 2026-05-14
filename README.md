@@ -178,7 +178,8 @@ build/linux/x64/release/bundle/
 
 ### Windows
 
-Windows builds must be generated on Windows. Install Flutter, Visual Studio with the "Desktop development with C++" workload, and then run:
+Windows builds must be generated on Windows. Install Flutter, Visual Studio with the
+"Desktop development with C++" workload, and then run:
 
 ```powershell
 flutter clean
@@ -191,3 +192,69 @@ The release bundle is generated at:
 ```text
 build\windows\x64\runner\Release\
 ```
+
+#### 📦 Creating a Windows Installer with Inno Setup
+
+An [Inno Setup](https://jrsoftware.org/isinfo.php) script is provided at
+`windows/kubegrandson_setup.iss`. It packages the Flutter release bundle into a single
+self-contained `.exe` installer that uses the Kubegrandson icon throughout.
+
+**What the installer provides:**
+
+- Default installation folder: `C:\Program Files\Kubegrandson\`
+- Start Menu shortcut with the Kubegrandson icon
+- Optional Desktop shortcut (opt-in during installation)
+- A proper uninstaller registered in *Add or Remove Programs*
+- Offer to launch the app immediately after installation
+
+**Steps to generate the installer:**
+
+1. Build the Flutter Windows release (if not done already):
+
+   ```powershell
+   flutter build windows --release
+   ```
+
+2. Download and install **Inno Setup 6** (free) from:
+   <https://jrsoftware.org/isdl.php>
+
+3. Compile the installer script from the project root:
+
+   ```powershell
+   iscc windows\kubegrandson_setup.iss
+   ```
+
+   Alternatively, open `windows\kubegrandson_setup.iss` in the Inno Setup IDE and
+   press **Ctrl+F9** (Build).
+
+4. The ready-to-distribute installer is generated at:
+
+   ```text
+   build\windows\installer\kubegrandson_setup.exe
+   ```
+
+5. Run `kubegrandson_setup.exe` on any Windows 10/11 machine to install Kubegrandson.
+
+> **Note:** No code-signing certificate is required for personal or internal use.
+> Windows SmartScreen may show a warning the first time the unsigned installer is run —
+> click *More info → Run anyway* to proceed.
+
+#### 🗑️ Uninstalling Kubegrandson
+
+The installer registers a standard Windows uninstaller. You can remove the app in any of
+the usual ways:
+
+- **Settings → Apps → Installed apps** — search for *Kubegrandson* and click *Uninstall*
+- **Control Panel → Programs → Uninstall a program** — double-click *Kubegrandson*
+- **Start Menu → Kubegrandson → Uninstall Kubegrandson**
+
+**User-data prompt**
+
+When the uninstaller starts it asks whether you also want to delete your personal
+application data (saved settings, kubeconfig cache, and stored credentials kept by
+`flutter_secure_storage`):
+
+| Answer | Effect |
+|--------|--------|
+| **No** *(default)* | Removes only the program files. Your data in `%LOCALAPPDATA%\Kubegrandson` and `%APPDATA%\Kubegrandson` is preserved so a reinstall picks it up automatically. |
+| **Yes** | Removes the program files **and** wipes both data folders completely. Choose this for a clean removal. |

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kubegrandson/core/utils/error_utils.dart';
 import 'package:kubegrandson/data/models/kubernetes/pod.dart';
+import 'package:kubegrandson/presentation/widgets/common/cluster_offline.dart';
 
 import '../../providers/kubernetes_provider.dart';
 import '../../providers/theme/app_colors.dart';
@@ -57,7 +59,14 @@ class HomeScreen extends ConsumerWidget {
                     },
                   ),
                   loading: () => const CircularProgressIndicator(),
-                  error: (error, _) => Text('Error: $error'),
+                  //error: (error, _) => Text('Error: $error'),
+                  error: (error, _) => Row(
+                    children: const [
+                      Icon(Icons.cloud_off, size: 18, color: AppColors.warning),
+                      SizedBox(width: 6,),
+                      Text('Cluster offline', style: TextStyle(color: AppColors.warning),)
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -172,9 +181,19 @@ class HomeScreen extends ConsumerWidget {
                 );
               },
               loading: () => const Center(child: LoadingIndicator()),
-              error: (error, _) => Center(
-                child: Text('Error: $error'),
-              ),
+              // error: (error, _) => Center(
+              //   child: Text('Error: $error'),
+              // ),
+              error: (error, _) => isClusterOfflineError(error) ?
+                  ClusterOffline(
+                    onRetry: (){
+                      ref.invalidate(initializeProvider);
+                      refreshKubernetesResources(ref);
+                    },
+                  )
+                  : Center(
+                    child: Text('Error: $error'),
+              )
             ),
           ),
         ],
