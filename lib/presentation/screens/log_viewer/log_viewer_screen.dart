@@ -35,6 +35,10 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
   final ItemPositionsListener _positionsListener =
       ItemPositionsListener.create();
 
+  double _jsonViewerWidth = 460.0;
+  static const double _minJsonViewerWidth = 200.0;
+  static const double _maxJsonViewerWidth = 900.0;
+
   @override
   void initState() {
     super.initState();
@@ -111,7 +115,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
             tooltip: 'Export Logs',
           ),
           IconButton(
-            icon: const Icon(Icons.clear_all, size: 20),
+            icon: const Icon(Icons.delete_sweep, size: 20),
             color: Colors.white70,
             onPressed: () {
               ref.read(logProvider(podKey).notifier).clearLogs();
@@ -140,15 +144,40 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
                                 positionsListener: _positionsListener,
                               ),
                   ),
-                  if (logState.selectedLogEntry?.metadata != null)
+                  if (logState.selectedLogEntry?.metadata != null) ...[
+                    MouseRegion(
+                      cursor: SystemMouseCursors.resizeLeftRight,
+                      child: GestureDetector(
+                        onHorizontalDragUpdate: (details) {
+                          setState(() {
+                            _jsonViewerWidth =
+                                (_jsonViewerWidth - details.delta.dx).clamp(
+                              _minJsonViewerWidth,
+                              _maxJsonViewerWidth,
+                            );
+                          });
+                        },
+                        child: SizedBox(
+                          width: 6,
+                          child: DecoratedBox(
+                            decoration: const BoxDecoration(
+                              color: Color(0xff2b2b2b),
+                            ),
+                            child: Center(
+                              child: Container(
+                                width: 2,
+                                color: const Color(0xff444444),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                     SizedBox(
-                      width: 460,
+                      width: _jsonViewerWidth,
                       child: DecoratedBox(
                         decoration: const BoxDecoration(
                           color: Color(0xff111111),
-                          border: Border(
-                            left: BorderSide(color: Color(0xff2b2b2b)),
-                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,6 +233,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
                         ),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),

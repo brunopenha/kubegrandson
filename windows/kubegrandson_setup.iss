@@ -22,6 +22,8 @@
 ; ---- Paths relative to this .iss file (windows\) -----------
 #define SrcBuildDir    "..\build\windows\x64\runner\Release"
 #define SrcIconFile    "..\assets\icons\" + MyAppIcoName
+; WizardSmallImageFile must be BMP or PNG – ICO is NOT accepted here.
+#define SrcWizardImg   "..\assets\icons\Kubegrandson_64.png"
 
 [Setup]
 ; A unique GUID for this application – regenerate with Tools > Generate GUID if you fork.
@@ -54,13 +56,18 @@ SolidCompression=yes
 
 ; Wizard appearance
 WizardStyle=modern
-WizardSmallImageFile={#SrcIconFile}
+; Must be BMP or PNG (not ICO) – use the 64×64 PNG asset.
+WizardSmallImageFile={#SrcWizardImg}
 
 ; Minimum Windows version: Windows 10
 MinVersion=10.0
 
-; Allow user-level install without admin rights
-PrivilegesRequiredOverridesAllowed=dialog
+; Run at the lowest privilege level that works:
+;   - Launched as admin  → installs to C:\Program Files\Kubegrandson\
+;   - Launched as normal user → installs to %LOCALAPPDATA%\Programs\Kubegrandson\
+; This avoids all mid-wizard privilege switching (ShellExecuteEx de-elevation)
+; that causes "CallSpawnServer" and "ShellExecuteEx hProcess=0" errors.
+PrivilegesRequired=lowest
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -92,10 +99,15 @@ Name: "{autodesktop}\{#MyAppName}"; \
   Tasks: desktopicon
 
 [Run]
-; Offer to launch the app immediately after installation
+; Offer to launch the app immediately after installation.
+; * shellexec  – uses ShellExecuteEx (avoids the spawn-server de-elevation
+;                path that causes "CallSpawnServer: Unexpected response: $0"
+;                when the installer ran elevated).
+; * WorkingDir – ensures flutter_windows.dll and sibling DLLs are found.
 Filename: "{app}\{#MyAppExeName}"; \
+  WorkingDir: "{app}"; \
   Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; \
-  Flags: nowait postinstall skipifsilent
+  Flags: shellexec nowait postinstall skipifsilent
 
 ; ============================================================
 ;  Uninstall
