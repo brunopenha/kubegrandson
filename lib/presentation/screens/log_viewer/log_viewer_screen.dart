@@ -1,8 +1,11 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kubegrandson/domain/services/log_export_service.dart';
+import 'package:kubegrandson/presentation/providers/settings_notifier.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../providers/log_provider.dart';
@@ -60,6 +63,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
   Widget build(BuildContext context) {
     final podKey = _podKey;
     final logState = ref.watch(logProvider(podKey));
+    final settings = ref.watch(settingsProvider);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -81,7 +85,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
                 'Container: ${widget.containerName}',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: Colors.white70,
-                  fontSize: 10,
+                  fontSize: settings.logFontSize,
                 ),
               ),
           ],
@@ -109,9 +113,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
           IconButton(
             icon: const Icon(Icons.download, size: 20),
             color: Colors.redAccent,
-            onPressed: () {
-              // TODO: Export logs
-            },
+            onPressed: () => _exportLogs(podKey),
             tooltip: 'Export Logs',
           ),
           IconButton(
@@ -126,6 +128,9 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
       ),
       body: Column(
         children: [
+          // TODO(json-log-import): Add the JSON file import/drop target here.
+          // Use LogImportService.parseJsonLogFile(content), then call:
+          // ref.read(logProvider(podKey).notifier).replaceLogs(parsedLogs);
           LogSearchBar(podKey: podKey),
           LogFilterToolbar(podKey: podKey),
           Expanded(
@@ -199,6 +204,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
                                     style: AppTextStyles.bodyMedium.copyWith(
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
+                                      fontSize: settings.logFontSize,
                                     ),
                                   ),
                                   const Spacer(),
@@ -221,10 +227,10 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
                                 child: SelectableText(
                                   const JsonEncoder.withIndent('  ').convert(
                                       logState.selectedLogEntry!.metadata),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'RobotoMono',
                                     color: Colors.white70,
-                                    fontSize: 11,
+                                    fontSize: settings.logFontSize,
                                   ),
                                 ),
                               ),
@@ -282,6 +288,46 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _exportLogs(String podKey) async {
+    final logs = ref.read(logProvider(podKey)).logs;
+    if (logs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No logs to export')),
+      );
+      return;
+    }
+
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'Export logs',
+      fileName: '${_safeFileName(_podNames.join('_'))}.log',
+      type: FileType.custom,
+      allowedExtensions: const ['log', 'txt'],
+    );
+
+    if (path == null) return;
+
+    try {
+      await LogExportService().exportToFile(
+        path: path,
+        logs: logs,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Exported ${logs.length} log lines')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export logs: $error')),
+      );
+    }
+  }
+
+  String _safeFileName(String value) {
+    return value.replaceAll(RegExp(r'[^a-zA-Z0-9_.-]+'), '_');
   }
 
   List<String> get _podNames =>

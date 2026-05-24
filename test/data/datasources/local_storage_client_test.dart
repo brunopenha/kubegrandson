@@ -1,0 +1,63 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:kubegrandson/core/constants/app_constants.dart';
+import 'package:kubegrandson/data/datasources/local_storage_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    LocalStorageClient.resetInstance();
+  });
+
+  test('returns defaults when preferences were not saved', () async {
+    final storage = await LocalStorageClient.getInstance();
+
+    expect(await storage.getFontSize(), AppConstants.defaultFontSize);
+    expect(await storage.getMaxLogLines(), AppConstants.defaultMaxLogLines);
+    expect(await storage.getAutoScroll(), AppConstants.defaultAutoScroll);
+    expect(await storage.getDefaultNamespace(), AppConstants.defaultNamespace);
+    expect(
+      await storage.getAutoRefreshIntervalSeconds(),
+      AppConstants.defaultAutoRefreshIntervalSeconds,
+    );
+  });
+
+  test('saves and loads log viewer preferences', () async {
+    final storage = await LocalStorageClient.getInstance();
+
+    await storage.setFontSize(18);
+    await storage.setMaxLogLines(5000);
+    await storage.setAutoScroll(false);
+
+    expect(await storage.getFontSize(), 18);
+    expect(await storage.getMaxLogLines(), 5000);
+    expect(await storage.getAutoScroll(), isFalse);
+  });
+
+  test('saves and loads kubernetes settings', () async {
+    final storage = await LocalStorageClient.getInstance();
+
+    await storage.setDefaultNamespace('kube-system');
+    await storage.setAutoRefreshIntervalSeconds(30);
+
+    expect(await storage.getDefaultNamespace(), 'kube-system');
+    expect(await storage.getAutoRefreshIntervalSeconds(), 30);
+  });
+
+  test('saves and loads theme preference', () async {
+    final storage = await LocalStorageClient.getInstance();
+
+    await storage.setThemePreference('system');
+
+    expect(await storage.getThemePreference(), 'system');
+  });
+
+  test('loads legacy isDarkMode theme preference', () async {
+    SharedPreferences.setMockInitialValues({'isDarkMode': false});
+    LocalStorageClient.resetInstance();
+
+    final storage = await LocalStorageClient.getInstance();
+
+    expect(await storage.getThemePreference(), 'light');
+  });
+}

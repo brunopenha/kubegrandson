@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../providers/settings_notifier.dart';
 import '../../providers/theme/app_colors.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/kubernetes_provider.dart';
@@ -19,9 +20,11 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final TextEditingController _kubeconfigController = TextEditingController();
-  Future<void>? _launched;
-  final Uri toLaunch =
-  Uri(scheme: 'https', host: 'github.com', path: 'brunopenha/kubegrandson/releases');
+  final Uri toLaunch = Uri(
+    scheme: 'https',
+    host: 'github.com',
+    path: 'brunopenha/kubegrandson/releases',
+  );
 
   @override
   void dispose() {
@@ -69,7 +72,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
-    final autoRefreshInterval = ref.watch(autoRefreshIntervalSecondsProvider);
+    final settings = ref.watch(settingsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -111,7 +114,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     helperText:
                         'Refresh namespaces, pods, services, and configmaps',
                   ),
-                  initialValue: autoRefreshInterval,
+                  initialValue: settings.autoRefreshIntervalSeconds,
                   items: const [
                     DropdownMenuItem(value: 0, child: Text('Off')),
                     DropdownMenuItem(value: 5, child: Text('Every 5 seconds')),
@@ -125,8 +128,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onChanged: (value) {
                     if (value != null) {
                       ref
-                          .read(autoRefreshIntervalSecondsProvider.notifier)
-                          .state = value;
+                          .read(settingsProvider.notifier)
+                          .setAutoRefreshInterval(value);
                     }
                   },
                 ),
@@ -138,7 +141,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                   ),
-                  initialValue: 'default',
+                  initialValue: settings.defaultNamespace,
                   items: const [
                     DropdownMenuItem(value: 'default', child: Text('default')),
                     DropdownMenuItem(
@@ -146,6 +149,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                   onChanged: (value) {
                     if (value != null) {
+                      ref
+                          .read(settingsProvider.notifier)
+                          .setDefaultNamespace(value);
                       ref.read(selectedNamespaceProvider.notifier).state =
                           value;
                     }
@@ -189,7 +195,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ],
                         selected: {themeMode},
                         onSelectionChanged: (Set<ThemeMode> selection) {
-                          ref.read(themeModeProvider.notifier).toggleTheme();
+                          ref
+                              .read(themeModeProvider.notifier)
+                              .setThemeMode(selection.single);
                         },
                       ),
                     ),
@@ -205,26 +213,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _buildSetting(
                 'Font Size',
                 Slider(
-                  value: 14,
+                  value: settings.logFontSize,
                   min: 10,
                   max: 20,
                   divisions: 10,
-                  label: '14',
+                  label: settings.logFontSize.round().toString(),
                   onChanged: (value) {
-                    // TODO: Update font size preference
+                    ref.read(settingsProvider.notifier).setLogFontSize(value);
                   },
                 ),
               ),
               const SizedBox(height: 16),
               _buildSetting(
                 'Max Lines',
-                TextField(
+                TextFormField(
+                  initialValue: settings.maxLogLines.toString(),
                   decoration: const InputDecoration(
                     hintText: '1000',
                     border: OutlineInputBorder(),
                     helperText: 'Maximum number of log lines to keep in memory',
                   ),
                   keyboardType: TextInputType.number,
+                  onFieldSubmitted: (value) {
+                    final parsed = int.tryParse(value);
+                    if (parsed != null && parsed > 0) {
+                      ref
+                          .read(settingsProvider.notifier)
+                          .setMaxLogLines(parsed);
+                    }
+                  },
                 ),
               ),
               const SizedBox(height: 16),
@@ -232,9 +249,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 'Auto-scroll',
                 SwitchListTile(
                   title: const Text('Enable auto-scroll by default'),
-                  value: true,
+                  value: settings.autoScroll,
                   onChanged: (value) {
-                    // TODO: Update preference
+                    ref.read(settingsProvider.notifier).setAutoScroll(value);
                   },
                 ),
               ),
@@ -270,9 +287,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Releases'),
                 subtitle: const Text('Get the last release on our GitHub page'),
                 trailing: const Icon(Icons.open_in_new),
-                onTap: () => setState(() {
-                  _launched = _launchInBrowser(toLaunch);
-                }),
+                onTap: () => _launchInBrowser(toLaunch),
               ),
             ],
           ),

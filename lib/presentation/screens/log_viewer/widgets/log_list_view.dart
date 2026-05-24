@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kubegrandson/presentation/providers/settings_notifier.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../providers/log_provider.dart';
@@ -62,12 +63,34 @@ class _LogListViewState extends ConsumerState<LogListView> {
     final logNotifier = ref.read(logProvider(widget.podKey).notifier);
     final logState = ref.watch(logProvider(widget.podKey));
     final logs = logNotifier.filteredLogs;
+    final settings = ref.watch(settingsProvider);
 
     if (logs.isEmpty) {
       return const Center(
         child: Text('No logs available'),
       );
     }
+
+    ref.listen(logProvider(widget.podKey), (previous, next) {
+      final selected = next.selectedLogEntry;
+      if (selected == null) return;
+
+      final index = ref
+          .read(logProvider(widget.podKey).notifier)
+          .filteredLogs
+          .indexOf(selected);
+
+      if (index < 0) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (widget.scrollController.isAttached) {
+          widget.scrollController.scrollTo(
+            index: index,
+            duration: const Duration(milliseconds: 250),
+          );
+        }
+      });
+    });
 
     return ScrollablePositionedList.builder(
       itemCount: logs.length,
@@ -107,9 +130,9 @@ class _LogListViewState extends ConsumerState<LogListView> {
                   child: Text(
                     '${log.lineNumber}',
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xff168a17),
-                      fontSize: 10,
+                    style: TextStyle(
+                      color: const Color(0xff168a17),
+                      fontSize: settings.logFontSize,
                       height: 1,
                       fontFamily: 'RobotoMono',
                     ),
@@ -122,9 +145,9 @@ class _LogListViewState extends ConsumerState<LogListView> {
                     child: Text(
                       log.source!,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xff7aa2f7),
-                        fontSize: 10,
+                      style: TextStyle(
+                        color: const Color(0xff7aa2f7),
+                        fontSize: settings.logFontSize,
                         height: 1,
                         fontFamily: 'RobotoMono',
                       ),
@@ -133,15 +156,13 @@ class _LogListViewState extends ConsumerState<LogListView> {
                   const SizedBox(width: 6),
                 ],
                 Expanded(
-                  child: SelectableText(
-                    _formatLogLine(log, logState.showTimestamps),
-                    maxLines: 1,
-                    style: TextStyle(
-                      color: _getLogColor(log.text),
-                      fontSize: 10,
-                      height: 1,
-                      fontFamily: 'RobotoMono',
+                  child: SelectableText.rich(
+                    _highlightedLogLine(
+                      log,
+                      logState.showTimestamps,
+                      logState.searchQuery,
                     ),
+                    maxLines: 1,
                   ),
                 ),
               ],
@@ -157,6 +178,56 @@ class _LogListViewState extends ConsumerState<LogListView> {
     if (!showTimestamp) return message;
 
     return '${log.timestamp.toIso8601String()} $message';
+  }
+
+  TextSpan _highlightedLogLine(
+    LogEntry log,
+    bool showTimestamp,
+    String searchQuery,
+  ) {
+    final text = _formatLogLine(log, showTimestamp);
+    final baseStyle = TextStyle(
+      color: _getLogColor(log.text),
+      fontSize: ref.watch(settingsProvider).logFontSize,
+      height: 1,
+      fontFamily: 'RobotoMono',
+    );
+
+    if (searchQuery.isEmpty) {
+      return TextSpan(text: text, style: baseStyle);
+    }
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = searchQuery.toLowerCase();
+    final spans = <TextSpan>[];
+    var start = 0;
+
+    while (true) {
+      final index = lowerText.indexOf(lowerQuery, start);
+      if (index < 0) {
+        spans.add(TextSpan(text: text.substring(start)));
+        break;
+      }
+
+      if (index > start) {
+        spans.add(TextSpan(text: text.substring(start, index)));
+      }
+
+      final end = index + searchQuery.length;
+      spans.add(
+        TextSpan(
+          text: text.substring(index, end),
+          style: baseStyle.copyWith(
+            color: Colors.black,
+            backgroundColor: const Color(0xffffd84a),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+      start = end;
+    }
+
+    return TextSpan(style: baseStyle, children: spans);
   }
 
   Color _getLogColor(String logText) {

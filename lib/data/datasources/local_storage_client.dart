@@ -1,4 +1,4 @@
-
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/app_logger.dart';
@@ -13,6 +13,11 @@ class LocalStorageClient {
     _instance ??= LocalStorageClient._();
     _instance!._prefs ??= await SharedPreferences.getInstance();
     return _instance!;
+  }
+
+  @visibleForTesting
+  static void resetInstance() {
+    _instance = null;
   }
 
   // Current Context
@@ -56,7 +61,15 @@ class LocalStorageClient {
   // Theme Preference
   Future<String?> getThemePreference() async {
     try {
-      return _prefs?.getString(AppConstants.themePreferenceKey);
+      final theme = _prefs?.getString(AppConstants.themePreferenceKey);
+      if (theme != null) return theme;
+
+      final legacyIsDarkMode = _prefs?.getBool('isDarkMode');
+      if (legacyIsDarkMode != null) {
+        return legacyIsDarkMode ? 'dark' : 'light';
+      }
+
+      return null;
     } catch (e, stackTrace) {
       AppLogger.error('Failed to get theme preference', e, stackTrace);
       return null;
@@ -84,7 +97,8 @@ class LocalStorageClient {
 
   Future<bool> setDefaultNamespace(String namespace) async {
     try {
-      return await _prefs?.setString(AppConstants.defaultNamespaceKey, namespace) ?? false;
+      return await _prefs?.setString(
+              AppConstants.defaultNamespaceKey, namespace) ?? false;
     } catch (e, stackTrace) {
       AppLogger.error('Failed to set default namespace', e, stackTrace);
       return false;
@@ -144,6 +158,31 @@ class LocalStorageClient {
       return await _prefs?.setBool(AppConstants.autoScrollKey, enabled) ?? false;
     } catch (e, stackTrace) {
       AppLogger.error('Failed to set auto scroll', e, stackTrace);
+      return false;
+    }
+  }
+
+  // Auto Refresh Interval Seconds
+  Future<int> getAutoRefreshIntervalSeconds() async {
+    try {
+      return _prefs?.getInt(AppConstants.autoRefreshIntervalSecondsKey) ?? AppConstants.defaultAutoRefreshIntervalSeconds;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+          'Failed to get auto refresh interval seconds', e, stackTrace);
+      return AppConstants.defaultAutoRefreshIntervalSeconds;
+    }
+  }
+
+  Future<bool> setAutoRefreshIntervalSeconds(int seconds) async {
+    try {
+      return await _prefs?.setInt(
+            AppConstants.autoRefreshIntervalSecondsKey,
+            seconds,
+          ) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+          'Failed to set auto refresh interval seconds', e, stackTrace);
       return false;
     }
   }

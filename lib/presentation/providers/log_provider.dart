@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../domain/services/kubernetes_service.dart';
 import 'kubernetes_provider.dart';
+import 'settings_notifier.dart';
 
 class LogEntry {
   final String text;
@@ -72,6 +74,7 @@ class LogState {
   final bool fatalOnly;
   final bool unknowOnly;
   final bool showTimestamps;
+  final int selectedSearchMatchIndex;
 
   LogState({
     this.logs = const [],
@@ -88,6 +91,7 @@ class LogState {
     this.fatalOnly = false,
     this.unknowOnly = false,
     this.showTimestamps = false,
+    this.selectedSearchMatchIndex = -1,
   });
 
   LogState copyWith({
@@ -103,7 +107,9 @@ class LogState {
     bool? warnOnly,
     bool? errorOnly,
     bool? fatalOnly,
+    bool? unknowOnly,
     bool? showTimestamps,
+    int? selectedSearchMatchIndex,
   }) {
     return LogState(
       logs: logs ?? this.logs,
@@ -119,8 +125,10 @@ class LogState {
       infoOnly: infoOnly ?? this.infoOnly,
       warnOnly: warnOnly ?? this.warnOnly,
       errorOnly: errorOnly ?? this.errorOnly,
-      fatalOnly: errorOnly ?? this.fatalOnly,
+      fatalOnly: fatalOnly ?? this.fatalOnly,
+      unknowOnly: unknowOnly ?? this.unknowOnly,
       showTimestamps: showTimestamps ?? this.showTimestamps,
+      selectedSearchMatchIndex: selectedSearchMatchIndex ?? this.selectedSearchMatchIndex,
     );
   }
 }
@@ -129,12 +137,17 @@ const Object _unset = Object();
 
 class LogNotifier extends StateNotifier<LogState> {
   final KubernetesService _kubernetesService;
-  final BehaviorSubject<List<LogEntry>> _logsController =
-      BehaviorSubject<List<LogEntry>>.seeded([]);
+  final int _maxLogLines;
+  final BehaviorSubject<List<LogEntry>> _logsController = BehaviorSubject<List<LogEntry>>.seeded([]);
   final List<StreamSubscription<String>> _subscriptions = [];
   int _lineNumber = 0;
 
-  LogNotifier(this._kubernetesService) : super(LogState());
+  LogNotifier(
+    this._kubernetesService, {
+    required bool defaultAutoScroll,
+    required int maxLogLines,
+  })  : _maxLogLines = maxLogLines,
+        super(LogState(autoScroll: defaultAutoScroll));
 
   Future<void> startStreaming({
     required String namespace,
@@ -179,6 +192,9 @@ class LogNotifier extends StateNotifier<LogState> {
             );
 
             final currentLogs = List<LogEntry>.from(state.logs)..add(entry);
+            if (currentLogs.length > _maxLogLines) {
+              currentLogs.removeRange(0, currentLogs.length - _maxLogLines);
+            }
             state = state.copyWith(logs: currentLogs, isLoading: false);
             _logsController.add(currentLogs);
           },
@@ -206,7 +222,21 @@ class LogNotifier extends StateNotifier<LogState> {
   }
 
   void setSearchQuery(String query) {
-    state = state.copyWith(searchQuery: query);
+    state = state.copyWith(
+      searchQuery: query,
+      selectedSearchMatchIndex: -1,
+      selectedLogEntry: null,
+    );
+  }
+
+  @visibleForTesting
+  void replaceLogs(List<LogEntry> logs) {
+    state = state.copyWith(
+      logs: logs,
+      selectedLogEntry: null,
+      selectedSearchMatchIndex: -1,
+    );
+    _logsController.add(logs);
   }
 
   void clearLogs() {
@@ -225,7 +255,7 @@ class LogNotifier extends StateNotifier<LogState> {
     if (state.errorOnly) selectedLevels.add('error');
     if (state.fatalOnly) selectedLevels.add('fatal');
 
-    if(selectedLevels.isNotEmpty){
+    if (selectedLevels.isNotEmpty) {
       logs = logs.where((log) {
         return selectedLevels.contains(log.level?.toLowerCase());
       }).toList();
@@ -237,6 +267,43 @@ class LogNotifier extends StateNotifier<LogState> {
         .where((log) =>
             log.text.toLowerCase().contains(state.searchQuery.toLowerCase()))
         .toList();
+  }
+
+  List<LogEntry> get searchMatches {
+    if (state.searchQuery.isEmpty) return const [];
+
+    return filteredLogs;
+  }
+
+  int get searchMatchCount => searchMatches.length;
+
+  int get searchHitCount {
+    final query = state.searchQuery.toLowerCase();
+    if (query.isEmpty) return 0;
+
+    return state.logs.fold<int>(0, (count, log) {
+      final text = log.text.toLowerCase();
+      var start = 0;
+      var hits = 0;
+
+      while (true) {
+        final index = text.indexOf(query, start);
+        if (index < 0) break;
+
+        hits++;
+        start = index + query.length;
+      }
+
+      return count + hits;
+    });
+  }
+
+  int get selectedSearchMatchNumber {
+    if (state.selectedSearchMatchIndex < 0 || searchMatchCount == 0) {
+      return 0;
+    }
+
+    return state.selectedSearchMatchIndex + 1;
   }
 
   @override
@@ -284,12 +351,49 @@ class LogNotifier extends StateNotifier<LogState> {
     }
     _subscriptions.clear();
   }
+
+  void goToNextSearchMatch() {
+    final matches = filteredLogs;
+
+    if (state.searchQuery.isEmpty || matches.isEmpty) {
+      return;
+    }
+
+    final nextIndex = (state.selectedSearchMatchIndex + 1) % matches.length;
+
+    state = state.copyWith(
+      selectedSearchMatchIndex: nextIndex,
+      selectedLogEntry: matches[nextIndex],
+    );
+  }
+
+  void goToPreviousSearchMatch() {
+    final matches = filteredLogs;
+
+    if (state.searchQuery.isEmpty || matches.isEmpty) {
+      return;
+    }
+
+    final previousIndex = state.selectedSearchMatchIndex <= 0
+        ? matches.length - 1
+        : state.selectedSearchMatchIndex - 1;
+
+    state = state.copyWith(
+      selectedSearchMatchIndex: previousIndex,
+      selectedLogEntry: matches[previousIndex],
+    );
+  }
 }
 
 final logProvider = StateNotifierProvider.family<LogNotifier, LogState, String>(
   (ref, podKey) {
     final service = ref.watch(kubernetesServiceProvider);
-    return LogNotifier(service);
+    final settings = ref.watch(settingsProvider);
+    return LogNotifier(
+      service,
+      defaultAutoScroll: settings.autoScroll,
+      maxLogLines: settings.maxLogLines,
+    );
   },
 );
 String prettyJson(String line) {

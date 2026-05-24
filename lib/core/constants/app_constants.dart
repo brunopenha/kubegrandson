@@ -13,12 +13,14 @@ class AppConstants {
   static const String fontSizeKey = 'font_size';
   static const String maxLogLinesKey = 'max_log_lines';
   static const String autoScrollKey = 'auto_scroll';
+  static const String autoRefreshIntervalSecondsKey = 'auto_refresh_interval_seconds';
 
   // Default values
   static const int defaultMaxLogLines = 1000;
   static const double defaultFontSize = 14.0;
   static const bool defaultAutoScroll = true;
   static const String defaultNamespace = 'default';
+  static const int defaultAutoRefreshIntervalSeconds = 10;
 
   // API
   static const Duration apiTimeout = Duration(seconds: 30);

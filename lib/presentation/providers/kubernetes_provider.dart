@@ -6,6 +6,7 @@ import '../../data/models/kubernetes/config_map.dart';
 import '../../data/models/kubernetes/pod.dart';
 import '../../data/models/kubernetes/service.dart';
 import '../../domain/services/kubernetes_service.dart';
+import 'settings_notifier.dart';
 
 final initializeProvider = FutureProvider<void>((ref) async {
   final service = ref.watch(kubernetesServiceProvider);
@@ -25,11 +26,19 @@ final namespacesProvider = FutureProvider<List<String>>((ref) async {
   return service.fetchNamespaces();
 });
 
-final selectedNamespaceProvider = StateProvider<String>((ref) => 'default');
+final selectedNamespaceProvider = StateProvider<String>((ref) {
+  return ref.watch(
+    settingsProvider.select((settings) => settings.defaultNamespace),
+  );
+});
 
 final selectedPodNamesProvider = StateProvider<Set<String>>((ref) => {});
 
-final autoRefreshIntervalSecondsProvider = StateProvider<int>((ref) => 10);
+final autoRefreshIntervalSecondsProvider = StateProvider<int>((ref) {
+  return ref.watch(
+    settingsProvider.select((settings) => settings.autoRefreshIntervalSeconds),
+  );
+});
 
 final podsProvider =
     FutureProvider.family<List<KubePod>, String>((ref, ns) async {
@@ -71,7 +80,9 @@ void refreshCurrentPods(WidgetRef ref) {
 }
 
 final autoRefreshProvider = Provider<void>((ref) {
-  final intervalSeconds = ref.watch(autoRefreshIntervalSecondsProvider);
+  final intervalSeconds = ref.watch(
+    settingsProvider.select((settings) => settings.autoRefreshIntervalSeconds),
+  );
   if (intervalSeconds <= 0) return;
 
   final timer = Timer.periodic(

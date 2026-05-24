@@ -19,6 +19,12 @@ class LogSearchBar extends ConsumerStatefulWidget {
 class _LogSearchBarState extends ConsumerState<LogSearchBar> {
   final TextEditingController _controller = TextEditingController();
 
+  void _clearSearch() {
+    _controller.clear();
+    ref.read(logProvider(widget.podKey).notifier).setSearchQuery('');
+    setState(() {});
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -27,6 +33,13 @@ class _LogSearchBarState extends ConsumerState<LogSearchBar> {
 
   @override
   Widget build(BuildContext context) {
+    final logState = ref.watch(logProvider(widget.podKey));
+    final logNotifier = ref.read(logProvider(widget.podKey).notifier);
+    final matchCount = logNotifier.searchMatchCount;
+    final hitCount = logNotifier.searchHitCount;
+    final selectedMatchNumber = logNotifier.selectedSearchMatchNumber;
+    final hasSearch = logState.searchQuery.isNotEmpty;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -45,14 +58,10 @@ class _LogSearchBarState extends ConsumerState<LogSearchBar> {
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _controller.text.isNotEmpty
                     ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _controller.clear();
-                    ref
-                        .read(logProvider(widget.podKey).notifier)
-                        .setSearchQuery('');
-                  },
-                )
+                        icon: const Icon(Icons.clear),
+                        onPressed: _clearSearch,
+                        tooltip: 'Clear search',
+                      )
                     : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -66,25 +75,77 @@ class _LogSearchBarState extends ConsumerState<LogSearchBar> {
                 ref
                     .read(logProvider(widget.podKey).notifier)
                     .setSearchQuery(value);
+                setState(() {});
               },
             ),
           ),
           const SizedBox(width: 12),
+          if (hasSearch) ...[
+            _SearchCounter(
+              selectedMatchNumber: selectedMatchNumber,
+              matchCount: matchCount,
+              hitCount: hitCount,
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.search_off),
+              onPressed: _clearSearch,
+              tooltip: 'Clear search',
+            ),
+            const SizedBox(width: 8),
+          ],
           IconButton(
             icon: const Icon(Icons.arrow_upward),
-            onPressed: () {
-              // TODO: Previous match
-            },
+            onPressed: matchCount == 0
+                ? null
+                : () {
+                    ref.read(logProvider(widget.podKey).notifier).goToPreviousSearchMatch();
+                  },
             tooltip: 'Previous match',
           ),
           IconButton(
             icon: const Icon(Icons.arrow_downward),
-            onPressed: () {
-              // TODO: Next match
-            },
+            onPressed: matchCount == 0
+                ? null
+                : () {
+                    ref.read(logProvider(widget.podKey).notifier).goToNextSearchMatch();
+                  },
             tooltip: 'Next match',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SearchCounter extends StatelessWidget {
+  final int selectedMatchNumber;
+  final int matchCount;
+  final int hitCount;
+
+  const _SearchCounter({
+    required this.selectedMatchNumber,
+    required this.matchCount,
+    required this.hitCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = matchCount == 0 ? AppColors.error : AppColors.textSecondary;
+    final selectedText = selectedMatchNumber == 0
+        ? matchCount.toString()
+        : '$selectedMatchNumber/$matchCount';
+    final hitLabel = hitCount == 1 ? 'hit' : 'hits';
+
+    return Tooltip(
+      message: '$hitCount $hitLabel in $matchCount lines',
+      child: Text(
+        matchCount == 0 ? '0 matches' : '$selectedText lines, $hitCount hits',
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }
