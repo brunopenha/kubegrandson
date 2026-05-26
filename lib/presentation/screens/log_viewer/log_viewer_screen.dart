@@ -111,6 +111,14 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
                 : 'Resume Auto-scroll',
           ),
           IconButton(
+            icon: const Icon(Icons.pin_end, size: 20),
+            color: Colors.white70,
+            onPressed: () {
+              ref.read(logProvider(podKey).notifier).addMarker();
+            },
+            tooltip: 'Add Log Marker',
+          ),
+          IconButton(
             icon: const Icon(Icons.download, size: 20),
             color: Colors.redAccent,
             onPressed: () => _exportLogs(podKey),

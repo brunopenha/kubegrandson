@@ -128,7 +128,8 @@ class LogState {
       fatalOnly: fatalOnly ?? this.fatalOnly,
       unknowOnly: unknowOnly ?? this.unknowOnly,
       showTimestamps: showTimestamps ?? this.showTimestamps,
-      selectedSearchMatchIndex: selectedSearchMatchIndex ?? this.selectedSearchMatchIndex,
+      selectedSearchMatchIndex:
+          selectedSearchMatchIndex ?? this.selectedSearchMatchIndex,
     );
   }
 }
@@ -136,9 +137,12 @@ class LogState {
 const Object _unset = Object();
 
 class LogNotifier extends StateNotifier<LogState> {
+  static const markerLine = '----------------------------------------';
+
   final KubernetesService _kubernetesService;
   final int _maxLogLines;
-  final BehaviorSubject<List<LogEntry>> _logsController = BehaviorSubject<List<LogEntry>>.seeded([]);
+  final BehaviorSubject<List<LogEntry>> _logsController =
+      BehaviorSubject<List<LogEntry>>.seeded([]);
   final List<StreamSubscription<String>> _subscriptions = [];
   int _lineNumber = 0;
 
@@ -242,6 +246,33 @@ class LogNotifier extends StateNotifier<LogState> {
   void clearLogs() {
     state = state.copyWith(logs: []);
     _logsController.add([]);
+  }
+
+  void addMarker() {
+    final now = DateTime.now();
+    final payload = <String, dynamic>{
+      'timestamp': now.toIso8601String(),
+      'level': 'marker',
+      'message': markerLine,
+      'type': 'manual-log-marker',
+    };
+    final text = jsonEncode(payload);
+    final entry = LogEntry(
+      text: text,
+      timestamp: now,
+      lineNumber: ++_lineNumber,
+      metadata: payload,
+      source: 'marker',
+      level: 'marker',
+    );
+
+    final currentLogs = List<LogEntry>.from(state.logs)..add(entry);
+    if (currentLogs.length > _maxLogLines) {
+      currentLogs.removeRange(0, currentLogs.length - _maxLogLines);
+    }
+
+    state = state.copyWith(logs: currentLogs, selectedLogEntry: entry);
+    _logsController.add(currentLogs);
   }
 
   List<LogEntry> get filteredLogs {

@@ -108,4 +108,21 @@ void main() {
     expect(notifier.state.selectedLogEntry, isNull);
     expect(notifier.state.selectedSearchMatchIndex, -1);
   });
+
+  test('addMarker appends a JSON marker log entry and selects it', () {
+    notifier.replaceLogs([
+      _entry('before marker', 1),
+    ]);
+
+    notifier.addMarker();
+
+    final marker = notifier.state.logs.last;
+    expect(notifier.state.logs, hasLength(2));
+    expect(marker.level, 'marker');
+    expect(marker.source, 'marker');
+    expect(marker.text, contains(LogNotifier.markerLine));
+    expect(marker.text, contains('manual-log-marker'));
+    expect(marker.metadata?['message'], LogNotifier.markerLine);
+    expect(notifier.state.selectedLogEntry, marker);
+  });
 }

@@ -63,8 +63,13 @@ class HomeScreen extends ConsumerWidget {
                   error: (error, _) => Row(
                     children: const [
                       Icon(Icons.cloud_off, size: 18, color: AppColors.warning),
-                      SizedBox(width: 6,),
-                      Text('Cluster offline', style: TextStyle(color: AppColors.warning),)
+                      SizedBox(
+                        width: 6,
+                      ),
+                      Text(
+                        'Cluster offline',
+                        style: TextStyle(color: AppColors.warning),
+                      )
                     ],
                   ),
                 ),
@@ -73,128 +78,148 @@ class HomeScreen extends ConsumerWidget {
           ),
           Expanded(
             child: podsAsync.when(
-              data: (pods) {
-                if (pods.isEmpty) {
-                  return const Center(
-                    child: Text('No pods found'),
-                  );
-                }
+                data: (pods) {
+                  if (pods.isEmpty) {
+                    return const Center(
+                      child: Text('No pods found'),
+                    );
+                  }
 
-                return Column(
-                  children: [
-                    if (selectedPodNames.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        child: Row(
-                          children: [
-                            Text('${selectedPodNames.length} pod(s) selected'),
-                            const Spacer(),
-                            OutlinedButton.icon(
-                              icon: const Icon(Icons.article),
-                              label: const Text('View Selected Logs'),
-                              onPressed: () {
-                                final selectedPods = pods
-                                    .where((pod) =>
-                                        selectedPodNames.contains(pod.name))
-                                    .toList();
-                                final namespace = selectedPods.first.namespace;
-                                final query = selectedPods
-                                    .map((pod) => pod.name)
-                                    .map(Uri.encodeComponent)
-                                    .join(',');
+                  final podGroups = groupPodsByLabel(pods);
 
-                                context.go(
-                                  '/logs/$namespace/${selectedPods.first.name}?pods=$query',
-                                );
-                              },
-                            ),
-                          ],
+                  return Column(
+                    children: [
+                      if (selectedPodNames.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: Row(
+                            children: [
+                              Text(
+                                  '${selectedPodNames.length} pod(s) selected'),
+                              const Spacer(),
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.article),
+                                label: const Text('View Selected Logs'),
+                                onPressed: () {
+                                  final selectedPods = pods
+                                      .where((pod) =>
+                                          selectedPodNames.contains(pod.name))
+                                      .toList();
+                                  final namespace =
+                                      selectedPods.first.namespace;
+                                  final query = selectedPods
+                                      .map((pod) => pod.name)
+                                      .map(Uri.encodeComponent)
+                                      .join(',');
+
+                                  context.go(
+                                    '/logs/$namespace/${selectedPods.first.name}?pods=$query',
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: podGroups.length,
+                          itemBuilder: (context, index) {
+                            final group = podGroups[index];
+                            final selected = group.pods.every(
+                                (pod) => selectedPodNames.contains(pod.name));
+                            final partiallySelected = !selected &&
+                                group.pods.any((pod) =>
+                                    selectedPodNames.contains(pod.name));
+
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              child: ListTile(
+                                leading: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Checkbox(
+                                      tristate: true,
+                                      value:
+                                          partiallySelected ? null : selected,
+                                      onChanged: (checked) {
+                                        final next =
+                                            Set<String>.from(selectedPodNames);
+                                        if (checked ?? false) {
+                                          next.addAll(group.pods
+                                              .map((pod) => pod.name));
+                                        } else {
+                                          next.removeAll(group.pods
+                                              .map((pod) => pod.name));
+                                        }
+                                        ref
+                                            .read(
+                                              selectedPodNamesProvider.notifier,
+                                            )
+                                            .state = next;
+                                      },
+                                    ),
+                                    _buildStatusIndicator(group.phase),
+                                  ],
+                                ),
+                                title: Text(group.title),
+                                subtitle: Text(
+                                  '${group.pods.length} replica(s) | ${group.statusText} | Restarts: ${group.restartCount}',
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.article),
+                                      onPressed: () {
+                                        final query = group.pods
+                                            .map((pod) => pod.name)
+                                            .map(Uri.encodeComponent)
+                                            .join(',');
+                                        context.go(
+                                          '/logs/${group.namespace}/${Uri.encodeComponent(group.title)}?pods=$query',
+                                        );
+                                      },
+                                      tooltip: 'View Logs',
+                                    ),
+                                    if (group.pods.length == 1)
+                                      IconButton(
+                                        icon: const Icon(Icons.delete),
+                                        onPressed: () {
+                                          _showDeletePodDialog(
+                                            context,
+                                            ref,
+                                            group.pods.single,
+                                          );
+                                        },
+                                        tooltip: 'Delete Pod',
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: pods.length,
-                        itemBuilder: (context, index) {
-                          final pod = pods[index];
-                          final selected = selectedPodNames.contains(pod.name);
-
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
-                            child: ListTile(
-                              leading: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Checkbox(
-                                    value: selected,
-                                    onChanged: (checked) {
-                                      final next =
-                                          Set<String>.from(selectedPodNames);
-                                      if (checked ?? false) {
-                                        next.add(pod.name);
-                                      } else {
-                                        next.remove(pod.name);
-                                      }
-                                      ref
-                                          .read(
-                                            selectedPodNamesProvider.notifier,
-                                          )
-                                          .state = next;
-                                    },
-                                  ),
-                                  _buildStatusIndicator(pod.phase),
-                                ],
-                              ),
-                              title: Text(pod.name),
-                              subtitle: Text(
-                                '${pod.statusText} | Restarts: ${pod.restartCount}',
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.article),
-                                    onPressed: () {
-                                      context.go(
-                                        '/logs/${pod.namespace}/${pod.name}',
-                                      );
-                                    },
-                                    tooltip: 'View Logs',
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () {
-                                      _showDeletePodDialog(context, ref, pod);
-                                    },
-                                    tooltip: 'Delete Pod',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
+                    ],
+                  );
+                },
+                loading: () => const Center(child: LoadingIndicator()),
+                // error: (error, _) => Center(
+                //   child: Text('Error: $error'),
+                // ),
+                error: (error, _) => isClusterOfflineError(error)
+                    ? ClusterOffline(
+                        onRetry: () {
+                          ref.invalidate(initializeProvider);
+                          refreshKubernetesResources(ref);
                         },
-                      ),
-                    ),
-                  ],
-                );
-              },
-              loading: () => const Center(child: LoadingIndicator()),
-              // error: (error, _) => Center(
-              //   child: Text('Error: $error'),
-              // ),
-              error: (error, _) => isClusterOfflineError(error) ?
-                  ClusterOffline(
-                    onRetry: (){
-                      ref.invalidate(initializeProvider);
-                      refreshKubernetesResources(ref);
-                    },
-                  )
-                  : Center(
-                    child: Text('Error: $error'),
-              )
-            ),
+                      )
+                    : Center(
+                        child: Text('Error: $error'),
+                      )),
           ),
         ],
       ),
@@ -229,6 +254,82 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class PodGroup {
+  final String title;
+  final String namespace;
+  final String phase;
+  final List<KubePod> pods;
+
+  const PodGroup({
+    required this.title,
+    required this.namespace,
+    required this.phase,
+    required this.pods,
+  });
+
+  int get restartCount => pods.fold(0, (sum, pod) => sum + pod.restartCount);
+
+  String get statusText {
+    final readyPods = pods.where((pod) => pod.isRunning).length;
+    return '$readyPods/${pods.length} Running';
+  }
+}
+
+@visibleForTesting
+List<PodGroup> groupPodsByLabel(List<KubePod> pods) {
+  final groups = <String, List<KubePod>>{};
+
+  for (final pod in pods) {
+    final groupName = _podGroupName(pod);
+    final key = '${pod.namespace}/$groupName';
+    groups.putIfAbsent(key, () => []).add(pod);
+  }
+
+  final podGroups = groups.entries.map((entry) {
+    final groupPods = [...entry.value]
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final first = groupPods.first;
+
+    return PodGroup(
+      title: _podGroupName(first),
+      namespace: first.namespace,
+      phase: _groupPhase(groupPods),
+      pods: groupPods,
+    );
+  }).toList()
+    ..sort((a, b) => a.title.compareTo(b.title));
+
+  return podGroups;
+}
+
+String _podGroupName(KubePod pod) {
+  final labels = pod.labels ?? const <String, String>{};
+
+  return labels['app.kubernetes.io/instance'] ??
+      labels['app.kubernetes.io/name'] ??
+      labels['app'] ??
+      labels['k8s-app'] ??
+      labels['component'] ??
+      _replicaSetPrefix(pod.name);
+}
+
+String _replicaSetPrefix(String podName) {
+  final parts = podName.split('-');
+  if (parts.length >= 3) {
+    return parts.take(parts.length - 2).join('-');
+  }
+
+  return podName;
+}
+
+String _groupPhase(List<KubePod> pods) {
+  if (pods.any((pod) => pod.isFailed)) return 'Failed';
+  if (pods.any((pod) => pod.isPending)) return 'Pending';
+  if (pods.every((pod) => pod.isRunning)) return 'Running';
+  if (pods.every((pod) => pod.isSucceeded)) return 'Succeeded';
+  return 'Unknown';
 }
 
 Future<void> _showDeletePodDialog(

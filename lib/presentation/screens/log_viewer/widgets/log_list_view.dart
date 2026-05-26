@@ -240,6 +240,9 @@ class _LogListViewState extends ConsumerState<LogListView> {
       return const Color(0xffd7d7d7);
     } else if (lowerText.contains('debug')) {
       return const Color(0xff8ab4f8);
+    } else if (lowerText.contains('manual-log-marker') ||
+        lowerText.contains('"level":"marker"')) {
+      return const Color(0xff7aa2f7);
     }
     return const Color(0xffbdbdbd);
   }
