@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/kubernetes/config_map.dart';
+import '../../data/models/kubernetes/deployment.dart';
 import '../../data/models/kubernetes/pod.dart';
 import '../../data/models/kubernetes/service.dart';
 import '../../domain/services/kubernetes_service.dart';
@@ -54,6 +55,13 @@ final servicesProvider =
   return service.fetchServices(ns);
 });
 
+final deploymentsProvider =
+    FutureProvider.family<List<KubeDeployment>, String>((ref, ns) async {
+  await ref.watch(initializeProvider.future); // wait until init completes
+  final service = ref.watch(kubernetesServiceProvider);
+  return service.fetchDeployments(ns);
+});
+
 final configMapsProvider =
     FutureProvider.family<List<KubeConfigMap>, String>((ref, ns) async {
   await ref.watch(initializeProvider.future); // wait until init completes
@@ -71,6 +79,7 @@ void refreshKubernetesResources(dynamic ref) {
   ref.invalidate(namespacesProvider);
   ref.invalidate(podsProvider(namespace));
   ref.invalidate(servicesProvider(namespace));
+  ref.invalidate(deploymentsProvider(namespace));
   ref.invalidate(configMapsProvider(namespace));
   ref.invalidate(currentPodsProvider);
 }

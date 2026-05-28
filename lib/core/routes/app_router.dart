@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import '../../presentation/screens/home/home_screen.dart';
+import '../../presentation/screens/config_maps/config_map_screen.dart';
 import '../../presentation/screens/log_viewer/log_viewer_screen.dart';
 import '../../presentation/screens/settings/settings_screen.dart';
 
@@ -35,6 +36,25 @@ class AppRouter {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/configmaps/:namespace/:group',
+        builder: (context, state) {
+          final namespace = state.pathParameters['namespace']!;
+          final group = state.pathParameters['group']!;
+          final pods = state.uri.queryParameters['pods']
+                  ?.split(',')
+                  .where((value) => value.isNotEmpty)
+                  .map(Uri.decodeComponent)
+                  .toList() ??
+              const <String>[];
+
+          return ConfigMapScreen(
+            namespace: namespace,
+            groupName: group,
+            podNames: pods,
+          );
+        },
       ),
     ],
   );

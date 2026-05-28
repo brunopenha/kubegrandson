@@ -33,7 +33,6 @@ class TabPill<T extends TabPillButtonConfig> extends StatefulWidget {
 class _TabPillState<T extends TabPillButtonConfig> extends State<TabPill<T>> {
   final Map<T, bool> _buttonStates = {};
   OverlayEntry? _currentOverlay;
-  T? _currentPopupKey;
 
   @override
   void initState() {
@@ -50,20 +49,15 @@ class _TabPillState<T extends TabPillButtonConfig> extends State<TabPill<T>> {
     widget.onButtonToggled?.call(button, _buttonStates[button]!);
   }
 
-  bool get _isAnySelected {
-    return _buttonStates.values.any((selected) => selected);
-  }
-
   void _showPopup(BuildContext context, T button, GlobalKey buttonKey) {
     if (widget.popups == null || !widget.popups!.containsKey(button)) return;
 
     final popup = widget.popups![button]!;
     final RenderBox renderBox =
-    buttonKey.currentContext!.findRenderObject() as RenderBox;
+        buttonKey.currentContext!.findRenderObject() as RenderBox;
     final position = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
 
-    _currentPopupKey = button;
     _currentOverlay = OverlayEntry(
       builder: (context) => Stack(
         children: [
@@ -103,7 +97,6 @@ class _TabPillState<T extends TabPillButtonConfig> extends State<TabPill<T>> {
   void _hidePopup() {
     _currentOverlay?.remove();
     _currentOverlay = null;
-    _currentPopupKey = null;
   }
 
   Widget _buildButton(T button, int index) {
@@ -112,31 +105,16 @@ class _TabPillState<T extends TabPillButtonConfig> extends State<TabPill<T>> {
     final isLast = index == widget.buttons.length - 1;
     final isSelected = _buttonStates[button] ?? false;
     final hasPopup = widget.popups?.containsKey(button) ?? false;
-
-    String pillClass;
-    if (widget.orientation == TabPillOrientation.horizontal) {
-      if (isFirst) {
-        pillClass = 'left-pill-horizontal';
-      } else if (isLast) {
-        pillClass = 'right-pill-horizontal';
-      } else {
-        pillClass = 'center-pill-horizontal';
-      }
-    } else {
-      if (isFirst) {
-        pillClass = 'left-pill-vertical';
-      } else if (isLast) {
-        pillClass = 'right-pill-vertical';
-      } else {
-        pillClass = 'center-pill-vertical';
-      }
-    }
+    const selectedBackground = Color(0xFF5A8FD8);
+    const selectedBorder = Color(0xFF8CB6EA);
+    const unselectedBackground = Color(0xFF303234);
+    const unselectedBorder = Color(0xFF7A7F83);
+    const selectedForeground = Color(0xFFFFFFFF);
+    const unselectedForeground = Color(0xFFD4D8DC);
 
     return MouseRegion(
       key: buttonKey,
-      onEnter: hasPopup
-          ? (_) => _showPopup(context, button, buttonKey)
-          : null,
+      onEnter: hasPopup ? (_) => _showPopup(context, button, buttonKey) : null,
       onExit: hasPopup ? (_) => _hidePopup() : null,
       child: Padding(
         padding: const EdgeInsets.all(1),
@@ -151,39 +129,37 @@ class _TabPillState<T extends TabPillButtonConfig> extends State<TabPill<T>> {
                 minHeight: 45,
               ),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.primary
-                    : AppColors.surfaceDark,
+                color: isSelected ? selectedBackground : unselectedBackground,
                 borderRadius: _getBorderRadius(isFirst, isLast),
                 border: Border.all(
-                  color: isSelected ? AppColors.primary : AppColors.border,
-                  width: 1,
+                  color: isSelected ? selectedBorder : unselectedBorder,
+                  width: isSelected ? 1.5 : 1,
                 ),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Center(
                 child: button.icon != null
                     ? Tooltip(
-                  message: button.text,
-                  child: Icon(
-                    button.icon,
-                    color: isSelected
-                        ? Colors.white
-                        : AppColors.textSecondary,
-                    size: 20,
-                  ),
-                )
+                        message: button.text,
+                        child: Icon(
+                          button.icon,
+                          color: isSelected
+                              ? selectedForeground
+                              : unselectedForeground,
+                          size: 20,
+                        ),
+                      )
                     : Text(
-                  button.text,
-                  style: TextStyle(
-                    color: isSelected
-                        ? Colors.white
-                        : AppColors.textSecondary,
-                    fontSize: 14,
-                    fontWeight:
-                    isSelected ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
+                        button.text,
+                        style: TextStyle(
+                          color: isSelected
+                              ? selectedForeground
+                              : unselectedForeground,
+                          fontSize: 14,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
               ),
             ),
           ),

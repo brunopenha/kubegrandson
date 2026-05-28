@@ -184,6 +184,20 @@ class HomeScreen extends ConsumerWidget {
                                       },
                                       tooltip: 'View Logs',
                                     ),
+                                    IconButton(
+                                      icon: const Icon(
+                                          Icons.settings_applications),
+                                      onPressed: () {
+                                        final query = group.pods
+                                            .map((pod) => pod.name)
+                                            .map(Uri.encodeComponent)
+                                            .join(',');
+                                        context.go(
+                                          '/configmaps/${group.namespace}/${Uri.encodeComponent(group.title)}?pods=$query',
+                                        );
+                                      },
+                                      tooltip: 'ConfigMaps',
+                                    ),
                                     if (group.pods.length == 1)
                                       IconButton(
                                         icon: const Icon(Icons.delete),
@@ -307,8 +321,7 @@ List<PodGroup> groupPodsByLabel(List<KubePod> pods) {
 String _podGroupName(KubePod pod) {
   final labels = pod.labels ?? const <String, String>{};
 
-  return labels['app.kubernetes.io/instance'] ??
-      labels['app.kubernetes.io/name'] ??
+  return labels['app.kubernetes.io/name'] ??
       labels['app'] ??
       labels['k8s-app'] ??
       labels['component'] ??

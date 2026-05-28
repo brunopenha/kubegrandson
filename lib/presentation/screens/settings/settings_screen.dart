@@ -171,10 +171,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Expanded(
                       child: SegmentedButton<ThemeMode>(
                         style: SegmentedButton.styleFrom(
-                          selectedForegroundColor:
-                              Theme.of(context).colorScheme.onSecondary,
-                          selectedBackgroundColor:
-                              Theme.of(context).colorScheme.secondary,
+                          foregroundColor: _settingsControlForeground,
+                          selectedForegroundColor: Colors.white,
+                          selectedBackgroundColor: const Color(0xFF55C77A),
+                          side: BorderSide(
+                            color: _settingsControlBorder,
+                          ),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         segments: const [
                           ButtonSegment(
@@ -212,15 +217,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             [
               _buildSetting(
                 'Font Size',
-                Slider(
-                  value: settings.logFontSize,
-                  min: 10,
-                  max: 20,
-                  divisions: 10,
-                  label: settings.logFontSize.round().toString(),
-                  onChanged: (value) {
-                    ref.read(settingsProvider.notifier).setLogFontSize(value);
-                  },
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: _settingsAccent,
+                    inactiveTrackColor: _settingsControlBorder,
+                    thumbColor: Colors.white,
+                    overlayColor: _settingsAccent.withValues(alpha: 0.18),
+                    valueIndicatorColor: _settingsAccent,
+                    valueIndicatorTextStyle: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  child: Slider(
+                    value: settings.logFontSize,
+                    min: 10,
+                    max: 20,
+                    divisions: 10,
+                    label: settings.logFontSize.round().toString(),
+                    onChanged: (value) {
+                      ref.read(settingsProvider.notifier).setLogFontSize(value);
+                    },
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -335,6 +353,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child,
       ],
     );
+  }
+
+  Color get _settingsControlForeground {
+    return Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFE8ECEF)
+        : const Color(0xFF1F2328);
+  }
+
+  Color get _settingsControlBorder {
+    return Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFB8C0C7)
+        : const Color(0xFF2D333B);
+  }
+
+  Color get _settingsAccent {
+    return Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF5A8FD8)
+        : const Color(0xFF2F72C4);
   }
 
   Future<void> _launchInBrowser(Uri url) async {

@@ -39,7 +39,7 @@ class LogEntry {
       prefix = '[${match.group(1)}]';
       try {
         parsed = jsonDecode(match.group(2)!);
-        level = parsed?['level']?.toString();
+        level = _normalizeLogLevel(parsed?['level']?.toString());
         final rawTimestamp = parsed?['timestamp']?.toString();
         timestamp =
             rawTimestamp == null ? null : DateTime.tryParse(rawTimestamp);
@@ -47,6 +47,7 @@ class LogEntry {
         parsed = null;
       }
     }
+    level ??= _inferLogLevel(raw);
 
     return LogEntry(
       text: raw,
@@ -170,6 +171,7 @@ class LogNotifier extends StateNotifier<LogState> {
   Future<void> startStreamingForPods({
     required String namespace,
     required List<String> podNames,
+    String? sourceLabel,
     String? containerName,
     int tailLines = 100,
   }) async {
@@ -192,7 +194,7 @@ class LogNotifier extends StateNotifier<LogState> {
             final entry = LogEntry.fromRaw(
               logLine,
               ++_lineNumber,
-              source: podName,
+              source: sourceLabel ?? podName,
             );
 
             final currentLogs = List<LogEntry>.from(state.logs)..add(entry);
@@ -250,18 +252,12 @@ class LogNotifier extends StateNotifier<LogState> {
 
   void addMarker() {
     final now = DateTime.now();
-    final payload = <String, dynamic>{
-      'timestamp': now.toIso8601String(),
-      'level': 'marker',
-      'message': markerLine,
-      'type': 'manual-log-marker',
-    };
-    final text = jsonEncode(payload);
+    final text = '$markerLine ${now.toIso8601String()} $markerLine';
     final entry = LogEntry(
       text: text,
       timestamp: now,
       lineNumber: ++_lineNumber,
-      metadata: payload,
+      metadata: null,
       source: 'marker',
       level: 'marker',
     );
@@ -288,7 +284,7 @@ class LogNotifier extends StateNotifier<LogState> {
 
     if (selectedLevels.isNotEmpty) {
       logs = logs.where((log) {
-        return selectedLevels.contains(log.level?.toLowerCase());
+        return selectedLevels.contains(_levelForFiltering(log));
       }).toList();
     }
 
@@ -413,6 +409,40 @@ class LogNotifier extends StateNotifier<LogState> {
       selectedSearchMatchIndex: previousIndex,
       selectedLogEntry: matches[previousIndex],
     );
+  }
+}
+
+String? _levelForFiltering(LogEntry log) {
+  return _normalizeLogLevel(log.level) ?? _inferLogLevel(log.text);
+}
+
+String? _inferLogLevel(String text) {
+  final lowerText = text.toLowerCase();
+  final levelPattern = RegExp(
+    r'(^|[^a-z])(trace|debug|info|warn|warning|error|fatal)([^a-z]|$)',
+    caseSensitive: false,
+  );
+  final match = levelPattern.firstMatch(lowerText);
+  return _normalizeLogLevel(match?.group(2));
+}
+
+String? _normalizeLogLevel(String? level) {
+  switch (level?.toLowerCase()) {
+    case 'trace':
+      return 'trace';
+    case 'debug':
+      return 'debug';
+    case 'info':
+      return 'info';
+    case 'warn':
+    case 'warning':
+      return 'warn';
+    case 'error':
+      return 'error';
+    case 'fatal':
+      return 'fatal';
+    default:
+      return null;
   }
 }
 

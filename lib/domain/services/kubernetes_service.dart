@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:k8s/k8s.dart' as k8s;
 import 'package:path/path.dart' as p;
 import '../../core/utils/app_logger.dart';
+import '../../data/models/kubernetes/deployment.dart' as deployments;
 import '../../data/models/kubernetes/config_map.dart' as config_maps;
 import '../../data/models/kubernetes/pod.dart' as models;
 import '../../data/models/kubernetes/service.dart' as services;
@@ -134,6 +135,62 @@ class KubernetesService {
     }).toList();
   }
 
+  Future<List<deployments.KubeDeployment>> fetchDeployments(
+    String namespace,
+  ) async {
+    final response = await _client!.dio.get<Map<String, dynamic>>(
+      namespace == 'all'
+          ? '/apis/apps/v1/deployments'
+          : '/apis/apps/v1/namespaces/$namespace/deployments',
+    );
+
+    final items = response.data?['items'] as List<dynamic>? ?? const [];
+    return items.map((item) {
+      final json = item as Map<String, dynamic>;
+      final metadata = json['metadata'] as Map<String, dynamic>? ?? const {};
+      final spec = json['spec'] as Map<String, dynamic>? ?? const {};
+      final status = json['status'] as Map<String, dynamic>? ?? const {};
+      return deployments.KubeDeployment(
+        name: metadata['name']?.toString() ?? 'Unknown',
+        namespace: metadata['namespace']?.toString() ?? namespace,
+        uid: metadata['uid']?.toString(),
+        replicas: spec['replicas'] as int? ?? 0,
+        readyReplicas: status['readyReplicas'] as int? ?? 0,
+        availableReplicas: status['availableReplicas'] as int? ?? 0,
+        unavailableReplicas: status['unavailableReplicas'] as int? ?? 0,
+        creationTimestamp: metadata['creationTimestamp'] == null
+            ? null
+            : DateTime.tryParse(metadata['creationTimestamp'].toString()),
+        labels: (metadata['labels'] as Map?)?.cast<String, String>(),
+        annotations: (metadata['annotations'] as Map?)?.cast<String, String>(),
+        updatedReplicas: status['updatedReplicas'] as int? ?? 0,
+      );
+    }).toList();
+  }
+
+  Future<Map<String, dynamic>> readDeploymentSpec({
+    required String namespace,
+    required String name,
+  }) async {
+    final response = await _client!.dio.get<Map<String, dynamic>>(
+      '/apis/apps/v1/namespaces/$namespace/deployments/$name',
+    );
+    return (response.data?['spec'] as Map<String, dynamic>?) ??
+        const <String, dynamic>{};
+  }
+
+  Future<void> updateDeploymentSpec({
+    required String namespace,
+    required String name,
+    required Map<String, dynamic> spec,
+  }) async {
+    await _client!.dio.patch<Map<String, dynamic>>(
+      '/apis/apps/v1/namespaces/$namespace/deployments/$name',
+      data: {'spec': spec},
+      options: Options(contentType: 'application/merge-patch+json'),
+    );
+  }
+
   Future<List<config_maps.KubeConfigMap>> fetchConfigMaps(
     String namespace,
   ) async {
@@ -155,6 +212,30 @@ class KubernetesService {
         binaryData: configMap.binaryData?.cast<String, String>(),
       );
     }).toList();
+  }
+
+  Future<config_maps.KubeConfigMap> updateConfigMapData({
+    required String namespace,
+    required String name,
+    required Map<String, String> data,
+  }) async {
+    final response = await _client!.dio.patch<Map<String, dynamic>>(
+      '/api/v1/namespaces/$namespace/configmaps/$name',
+      data: {'data': data},
+      options: Options(contentType: 'application/merge-patch+json'),
+    );
+
+    final json = response.data ?? const <String, dynamic>{};
+    final metadata = json['metadata'] as Map<String, dynamic>? ?? const {};
+    return config_maps.KubeConfigMap(
+      name: metadata['name']?.toString() ?? name,
+      namespace: metadata['namespace']?.toString() ?? namespace,
+      uid: metadata['uid']?.toString(),
+      labels: (metadata['labels'] as Map?)?.cast<String, String>(),
+      annotations: (metadata['annotations'] as Map?)?.cast<String, String>(),
+      data: (json['data'] as Map?)?.cast<String, String>(),
+      binaryData: (json['binaryData'] as Map?)?.cast<String, String>(),
+    );
   }
 
   Future<List<String>> fetchNamespaces() async {

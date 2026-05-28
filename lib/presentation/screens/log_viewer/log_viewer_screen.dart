@@ -55,6 +55,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
     ref.read(logProvider(podKey).notifier).startStreamingForPods(
           namespace: widget.namespace,
           podNames: _podNames,
+          sourceLabel: widget.podName,
           containerName: widget.containerName,
         );
   }
@@ -157,7 +158,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
                                 positionsListener: _positionsListener,
                               ),
                   ),
-                  if (logState.selectedLogEntry?.metadata != null) ...[
+                  if (logState.selectedLogEntry != null) ...[
                     MouseRegion(
                       cursor: SystemMouseCursors.resizeLeftRight,
                       child: GestureDetector(
@@ -219,7 +220,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
                                   IconButton(
                                     icon: const Icon(Icons.close, size: 18),
                                     color: Colors.white70,
-                                    tooltip: 'Close JSON',
+                                    tooltip: 'Close',
                                     onPressed: () {
                                       ref
                                           .read(logProvider(podKey).notifier)
@@ -233,8 +234,9 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
                               child: SingleChildScrollView(
                                 padding: const EdgeInsets.all(12),
                                 child: SelectableText(
-                                  const JsonEncoder.withIndent('  ').convert(
-                                      logState.selectedLogEntry!.metadata),
+                                  _formatSelectedLogDetails(
+                                    logState.selectedLogEntry!,
+                                  ),
                                   style: TextStyle(
                                     fontFamily: 'RobotoMono',
                                     color: Colors.white70,
@@ -332,6 +334,14 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
         SnackBar(content: Text('Failed to export logs: $error')),
       );
     }
+  }
+
+  String _formatSelectedLogDetails(LogEntry log) {
+    if (log.metadata != null) {
+      return const JsonEncoder.withIndent('  ').convert(log.metadata);
+    }
+
+    return log.text;
   }
 
   String _safeFileName(String value) {

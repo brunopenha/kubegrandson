@@ -109,7 +109,7 @@ void main() {
     expect(notifier.state.selectedSearchMatchIndex, -1);
   });
 
-  test('addMarker appends a JSON marker log entry and selects it', () {
+  test('addMarker appends a plain marker log entry and selects it', () {
     notifier.replaceLogs([
       _entry('before marker', 1),
     ]);
@@ -121,8 +121,48 @@ void main() {
     expect(marker.level, 'marker');
     expect(marker.source, 'marker');
     expect(marker.text, contains(LogNotifier.markerLine));
-    expect(marker.text, contains('manual-log-marker'));
-    expect(marker.metadata?['message'], LogNotifier.markerLine);
+    expect(marker.text, isNot(contains('manual-log-marker')));
+    expect(marker.metadata, isNull);
     expect(notifier.state.selectedLogEntry, marker);
+  });
+
+  test('log level filters match plain text logs', () {
+    notifier.replaceLogs([
+      _entry('[2026-05-28T21:55:59] INFO application started', 1),
+      _entry('WARN retrying request', 2),
+      _entry('plain line without level', 3),
+      _entry('ERROR request failed', 4),
+    ]);
+
+    notifier.setInfoFilter(true);
+    expect(notifier.filteredLogs.map((log) => log.lineNumber), [1]);
+
+    notifier.setInfoFilter(false);
+    notifier.setWarnFilter(true);
+    expect(notifier.filteredLogs.map((log) => log.lineNumber), [2]);
+
+    notifier.setWarnFilter(false);
+    notifier.setErrorFilter(true);
+    expect(notifier.filteredLogs.map((log) => log.lineNumber), [4]);
+  });
+
+  test('log level filters match JSON logs', () {
+    notifier.replaceLogs([
+      LogEntry.fromRaw(
+        '[2026-05-28T21:55:59] {"level":"WARNING","message":"careful"}',
+        1,
+      ),
+      LogEntry.fromRaw(
+        '[2026-05-28T21:56:00] {"level":"DEBUG","message":"details"}',
+        2,
+      ),
+    ]);
+
+    notifier.setWarnFilter(true);
+    expect(notifier.filteredLogs.map((log) => log.lineNumber), [1]);
+
+    notifier.setWarnFilter(false);
+    notifier.setDebugFilter(true);
+    expect(notifier.filteredLogs.map((log) => log.lineNumber), [2]);
   });
 }

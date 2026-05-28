@@ -53,14 +53,17 @@ class LogFilterToolbar extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          const Text('Log Level:'),
+          const Text(
+            'Log Level:',
+            style: TextStyle(color: Color(0xFFE3E6E8)),
+          ),
           const SizedBox(width: 12),
           TabPill<LogLevelFilter>(
             buttons: LogLevelFilter.values,
             orientation: TabPillOrientation.horizontal,
             minButtonWidth: 50,
             onButtonToggled: (key, selected) {
-              switch(key){
+              switch (key) {
                 case LogLevelFilter.trace:
                   logNotifier.setTraceFilter(selected);
                   break;
@@ -97,7 +100,10 @@ class LogFilterToolbar extends ConsumerWidget {
               logNotifier.setShowTimestamps(value ?? false);
             },
           ),
-          const Text('Show Timestamps'),
+          const Text(
+            'Show Timestamps',
+            style: TextStyle(color: Color(0xFFE3E6E8)),
+          ),
         ],
       ),
     );
