@@ -13,7 +13,7 @@
 ; ============================================================
 
 #define MyAppName      "Kubegrandson"
-#define MyAppVersion   "0.0.1"
+#define MyAppVersion   "0.0.5"
 #define MyAppPublisher "Bruno Penha"
 #define MyAppURL       "https://github.com/brunopenha/kubegrandson"
 #define MyAppExeName   "kubegrandson.exe"
