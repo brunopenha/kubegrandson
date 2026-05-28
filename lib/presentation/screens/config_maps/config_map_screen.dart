@@ -1,8 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:yaml/yaml.dart';
 
 import '../../../data/models/kubernetes/config_map.dart';
 import '../../../data/models/kubernetes/deployment.dart';
@@ -101,7 +100,7 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
                   if (selectedConfigMap != null &&
                       _configMapController.text.isEmpty) {
                     _configMapController.text =
-                        _formatJson(selectedConfigMap.data ?? {});
+                        _formatYaml(selectedConfigMap.data ?? {});
                   }
                   if (selectedDeployment != null &&
                       _deploymentController.text.isEmpty &&
@@ -184,7 +183,7 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
               );
               setState(() {
                 _selectedConfigMapName = value;
-                _configMapController.text = _formatJson(next?.data ?? {});
+                _configMapController.text = _formatYaml(next?.data ?? {});
               });
             },
           ),
@@ -192,7 +191,7 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
           Expanded(
             child: _JsonEditor(
               controller: _configMapController,
-              label: 'ConfigMap data as JSON',
+              label: 'ConfigMap data as YAML',
             ),
           ),
         ],
@@ -242,7 +241,7 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _JsonEditor(
                     controller: _deploymentController,
-                    label: 'Deployment spec as JSON',
+                    label: 'Deployment spec as YAML',
                   ),
           ),
         ],
@@ -342,8 +341,63 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
       });
   }
 
-  String _formatJson(Object data) {
-    return const JsonEncoder.withIndent('  ').convert(data);
+  String _formatYaml(Object? data, [int indent = 0]) {
+    if (data is Map) {
+      if (data.isEmpty) return '{}';
+      return data.entries.map((entry) {
+        final key = entry.key.toString();
+        final value = entry.value;
+        if (value is Map || value is List) {
+          return '${_spaces(indent)}$key:\n${_formatYaml(value, indent + 2)}';
+        }
+        return '${_spaces(indent)}$key: ${_formatYamlScalar(value)}';
+      }).join('\n');
+    }
+
+    if (data is List) {
+      if (data.isEmpty) return '${_spaces(indent)}[]';
+      return data.map((value) {
+        if (value is Map || value is List) {
+          return '${_spaces(indent)}-\n${_formatYaml(value, indent + 2)}';
+        }
+        return '${_spaces(indent)}- ${_formatYamlScalar(value)}';
+      }).join('\n');
+    }
+
+    return '${_spaces(indent)}${_formatYamlScalar(data)}';
+  }
+
+  String _spaces(int count) => ' ' * count;
+
+  String _formatYamlScalar(Object? value) {
+    if (value == null) return 'null';
+    if (value is num || value is bool) return value.toString();
+
+    final text = value.toString();
+    if (text.isEmpty) return "''";
+
+    final plainSafe = RegExp(r'^[A-Za-z0-9_./@-]+$').hasMatch(text) &&
+        !const {'true', 'false', 'null', 'yes', 'no', 'on', 'off'}
+            .contains(text.toLowerCase());
+    if (plainSafe) return text;
+
+    return "'${text.replaceAll("'", "''")}'";
+  }
+
+  Object? _parseYaml(String content) {
+    return _toPlainYamlValue(loadYaml(content));
+  }
+
+  Object? _toPlainYamlValue(Object? value) {
+    if (value is YamlMap) {
+      return value.map((key, nestedValue) {
+        return MapEntry(key.toString(), _toPlainYamlValue(nestedValue));
+      });
+    }
+    if (value is YamlList) {
+      return value.map(_toPlainYamlValue).toList();
+    }
+    return value;
   }
 
   T? _firstWhereOrNull<T>(Iterable<T> items, bool Function(T item) test) {
@@ -362,7 +416,7 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
           );
       if (!mounted) return;
       setState(() {
-        _deploymentController.text = _formatJson(spec);
+        _deploymentController.text = _formatYaml(spec);
         _deploymentSpecLoading = false;
       });
     } catch (error) {
@@ -376,9 +430,9 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
 
   Future<void> _saveConfigMap(KubeConfigMap configMap) async {
     try {
-      final decoded = jsonDecode(_configMapController.text);
+      final decoded = _parseYaml(_configMapController.text);
       if (decoded is! Map<String, dynamic>) {
-        throw const FormatException('Expected a JSON object');
+        throw const FormatException('Expected a YAML object');
       }
 
       final data = decoded.map((key, value) {
@@ -406,9 +460,9 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
 
   Future<void> _saveDeployment(KubeDeployment deployment) async {
     try {
-      final decoded = jsonDecode(_deploymentController.text);
+      final decoded = _parseYaml(_deploymentController.text);
       if (decoded is! Map<String, dynamic>) {
-        throw const FormatException('Expected a JSON object');
+        throw const FormatException('Expected a YAML object');
       }
 
       await ref.read(kubernetesServiceProvider).updateDeploymentSpec(
