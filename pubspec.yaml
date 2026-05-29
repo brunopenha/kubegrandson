@@ -2,7 +2,7 @@ name: kubegrandson
 description: "A Flutter-based Kubernetes log viewer application - son of Kubeson."
 publish_to: 'none'
 
-version: 0.0.5+1
+version: 0.0.6+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

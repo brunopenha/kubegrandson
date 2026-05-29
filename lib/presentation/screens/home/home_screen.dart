@@ -17,6 +17,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(autoRefreshProvider);
 
+    final contextsAsync = ref.watch(contextsProvider);
     final namespacesAsync = ref.watch(namespacesProvider);
     final selectedNamespace = ref.watch(selectedNamespaceProvider);
     final selectedPodNames = ref.watch(selectedPodNamesProvider);
@@ -37,41 +38,169 @@ class HomeScreen extends ConsumerWidget {
           const MainToolbar(),
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Namespace: '),
-                const SizedBox(width: 8),
-                namespacesAsync.when(
-                  data: (namespaces) => DropdownButton<String>(
-                    value: selectedNamespace,
-                    items: namespaces
-                        .map((ns) => DropdownMenuItem(
-                              value: ns,
-                              child: Text(ns),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        ref.read(selectedNamespaceProvider.notifier).state =
-                            value;
-                        ref.read(selectedPodNamesProvider.notifier).state = {};
-                      }
-                    },
-                  ),
-                  loading: () => const CircularProgressIndicator(),
-                  //error: (error, _) => Text('Error: $error'),
-                  error: (error, _) => Row(
-                    children: const [
-                      Icon(Icons.cloud_off, size: 18, color: AppColors.warning),
-                      SizedBox(
-                        width: 6,
+                Row(
+                  children: [
+                    const Text('Context: '),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: contextsAsync.when(
+                        data: (contexts) {
+                          if (contexts.isEmpty) {
+                            return const Text('No contexts found');
+                          }
+
+                          final activeContext = contexts.firstWhere(
+                            (ctx) => ctx.isActive,
+                            orElse: () => contexts.first,
+                          );
+
+                          return DropdownButton<String>(
+                            isExpanded: true,
+                            value: activeContext.name,
+                            items: contexts
+                                .map((ctx) => DropdownMenuItem(
+                                      value: ctx.name,
+                                      child: Text(
+                                        ctx.name,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: (value) async {
+                              if (value == null ||
+                                  value == activeContext.name) {
+                                return;
+                              }
+
+                              final selectedContext = contexts.firstWhere(
+                                (ctx) => ctx.name == value,
+                                orElse: () => activeContext,
+                              );
+
+                              try {
+                                await switchKubernetesContext(
+                                  ref,
+                                  contextName: value,
+                                  namespace: selectedContext.namespace,
+                                );
+
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content:
+                                          Text('Switched context to $value'),
+                                    ),
+                                  );
+                                }
+                              } catch (error) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Failed to switch context: $error',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          );
+                        },
+                        loading: () => const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        error: (_, __) => Row(
+                          children: const [
+                            Icon(
+                              Icons.cloud_off,
+                              size: 18,
+                              color: AppColors.warning,
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'Cluster offline',
+                              style: TextStyle(color: AppColors.warning),
+                            ),
+                          ],
+                        ),
                       ),
-                      Text(
-                        'Cluster offline',
-                        style: TextStyle(color: AppColors.warning),
-                      )
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text('Namespace: '),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: namespacesAsync.when(
+                        data: (namespaces) {
+                          if (namespaces.isEmpty) {
+                            return const Text('No namespaces found');
+                          }
+
+                          final effectiveNamespace =
+                              namespaces.contains(selectedNamespace)
+                                  ? selectedNamespace
+                                  : namespaces.first;
+
+                          if (effectiveNamespace != selectedNamespace) {
+                            Future.microtask(() {
+                              ref
+                                  .read(selectedNamespaceProvider.notifier)
+                                  .state = effectiveNamespace;
+                              ref
+                                  .read(selectedPodNamesProvider.notifier)
+                                  .state = {};
+                            });
+                          }
+
+                          return DropdownButton<String>(
+                            isExpanded: true,
+                            value: effectiveNamespace,
+                            items: namespaces
+                                .map((ns) => DropdownMenuItem(
+                                      value: ns,
+                                      child: Text(ns),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                ref
+                                    .read(selectedNamespaceProvider.notifier)
+                                    .state = value;
+                                ref
+                                    .read(selectedPodNamesProvider.notifier)
+                                    .state = {};
+                              }
+                            },
+                          );
+                        },
+                        loading: () => const CircularProgressIndicator(),
+                        error: (error, _) => Row(
+                          children: const [
+                            Icon(
+                              Icons.cloud_off,
+                              size: 18,
+                              color: AppColors.warning,
+                            ),
+                            SizedBox(
+                              width: 6,
+                            ),
+                            Text(
+                              'Cluster offline',
+                              style: TextStyle(color: AppColors.warning),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

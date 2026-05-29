@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/models/app_state/cluster_context.dart';
 import '../../data/models/kubernetes/config_map.dart';
 import '../../data/models/kubernetes/deployment.dart';
 import '../../data/models/kubernetes/pod.dart';
@@ -25,6 +26,12 @@ final namespacesProvider = FutureProvider<List<String>>((ref) async {
   await ref.watch(initializeProvider.future); // wait until init completes
   final service = ref.watch(kubernetesServiceProvider);
   return service.fetchNamespaces();
+});
+
+final contextsProvider = FutureProvider<List<ClusterContext>>((ref) async {
+  await ref.watch(initializeProvider.future); // wait until init completes
+  final service = ref.watch(kubernetesServiceProvider);
+  return service.fetchContexts();
 });
 
 final selectedNamespaceProvider = StateProvider<String>((ref) {
@@ -76,6 +83,7 @@ final currentPodsProvider = FutureProvider<List<KubePod>>((ref) async {
 
 void refreshKubernetesResources(dynamic ref) {
   final namespace = ref.read(selectedNamespaceProvider);
+  ref.invalidate(contextsProvider);
   ref.invalidate(namespacesProvider);
   ref.invalidate(podsProvider(namespace));
   ref.invalidate(servicesProvider(namespace));
@@ -85,6 +93,18 @@ void refreshKubernetesResources(dynamic ref) {
 }
 
 void refreshCurrentPods(WidgetRef ref) {
+  refreshKubernetesResources(ref);
+}
+
+Future<void> switchKubernetesContext(
+  WidgetRef ref, {
+  required String contextName,
+  String? namespace,
+}) async {
+  final service = ref.read(kubernetesServiceProvider);
+  await service.switchContext(contextName);
+  ref.read(selectedNamespaceProvider.notifier).state = namespace ?? 'default';
+  ref.read(selectedPodNamesProvider.notifier).state = {};
   refreshKubernetesResources(ref);
 }
 

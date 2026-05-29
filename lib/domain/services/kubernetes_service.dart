@@ -3,8 +3,10 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:k8s/k8s.dart' as k8s;
+import 'package:kubeconfig/kubeconfig.dart' as kubeconfig;
 import 'package:path/path.dart' as p;
 import '../../core/utils/app_logger.dart';
+import '../../data/models/app_state/cluster_context.dart';
 import '../../data/models/kubernetes/deployment.dart' as deployments;
 import '../../data/models/kubernetes/config_map.dart' as config_maps;
 import '../../data/models/kubernetes/pod.dart' as models;
@@ -12,6 +14,8 @@ import '../../data/models/kubernetes/service.dart' as services;
 
 class KubernetesService {
   k8s.ApiClient? _client;
+  String? _kubeconfigPath;
+  String? _currentContextName;
 
   final k8s.Kubernetes Function() _kubernetesFactory;
   final k8s.CoreV1Api Function(Dio dio) _coreV1ApiFactory;
@@ -34,20 +38,19 @@ class KubernetesService {
                 Platform.environment['HOME'] ??
                 Platform.environment['USERPROFILE']);
 
+  String? get currentContextName => _currentContextName;
+
   Future<void> initialize({String? kubeconfigPath}) async {
     try {
       final kubernetes = _kubernetesFactory();
 
       // If no path provided, resolve default ~/.kube/config cross‑platform
-      if (kubeconfigPath == null) {
-        final home = _homeDirResolver();
-        final defaultPath = p.join(home!, '.kube', 'config');
-        await kubernetes.initFromFile(defaultPath);
-      } else {
-        await kubernetes.initFromFile(kubeconfigPath);
-      }
+      final resolvedPath =
+          kubeconfigPath ?? _kubeconfigPath ?? _resolveDefaultKubeconfigPath();
+      await kubernetes.initFromFile(resolvedPath);
 
       _client = kubernetes.client;
+      _kubeconfigPath = resolvedPath;
       _client!.dio.options
         ..connectTimeout =
             const Duration(seconds: 30) // allow more time to connect
@@ -57,6 +60,17 @@ class KubernetesService {
       final versionApi = _versionApiFactory(_client!.dio);
       final version = await versionApi.getCode();
 
+      try {
+        _currentContextName = await _readCurrentContextName(resolvedPath);
+      } catch (e, stackTrace) {
+        _currentContextName = null;
+        AppLogger.warning(
+          'Unable to determine current context from kubeconfig.',
+          e,
+          stackTrace,
+        );
+      }
+
       AppLogger.info('Kubernetes client initialized');
       AppLogger.info('Version: ${version.data?.gitVersion}');
       AppLogger.info('KubernetesService.client: $_client');
@@ -64,6 +78,41 @@ class KubernetesService {
       AppLogger.error('Failed to initialize Kubernetes client', e, stackTrace);
       rethrow;
     }
+  }
+
+  Future<List<ClusterContext>> fetchContexts() async {
+    final kubeconfigPath = _kubeconfigPath ?? _resolveDefaultKubeconfigPath();
+    final config = await _readKubeconfig(kubeconfigPath);
+    final activeContext = config.currentContext;
+
+    return (config.contexts ?? <kubeconfig.NamedContext>[]).map((named) {
+      final context = named.context;
+      return ClusterContext(
+        name: named.name ?? '',
+        cluster: context?.cluster,
+        user: context?.authInfo,
+        namespace: context?.namespace ?? 'default',
+        isActive: named.name == activeContext,
+      );
+    }).toList();
+  }
+
+  Future<void> switchContext(String contextName) async {
+    final kubeconfigPath = _kubeconfigPath ?? _resolveDefaultKubeconfigPath();
+    final config = await _readKubeconfig(kubeconfigPath);
+
+    final contextExists =
+        (config.contexts ?? <kubeconfig.NamedContext>[]).any((named) {
+      return named.name == contextName;
+    });
+
+    if (!contextExists) {
+      throw Exception('Context "$contextName" not found in kubeconfig.');
+    }
+
+    final updatedConfig = config.copyWith(currentContext: contextName);
+    await File(kubeconfigPath).writeAsString(updatedConfig.toYaml());
+    await initialize(kubeconfigPath: kubeconfigPath);
   }
 
   Future<List<models.KubePod>> fetchPods(String namespace) async {
@@ -267,6 +316,27 @@ class KubernetesService {
 
   void dispose() {
     _client = null; // no explicit close needed
+  }
+
+  String _resolveDefaultKubeconfigPath() {
+    final home = _homeDirResolver();
+    if (home == null || home.isEmpty) {
+      throw Exception(
+        'Unable to resolve home directory for default kubeconfig path.',
+      );
+    }
+
+    return p.join(home, '.kube', 'config');
+  }
+
+  Future<kubeconfig.Kubeconfig> _readKubeconfig(String kubeconfigPath) async {
+    final content = await File(kubeconfigPath).readAsString();
+    return kubeconfig.Kubeconfig.fromYaml(content);
+  }
+
+  Future<String?> _readCurrentContextName(String kubeconfigPath) async {
+    final config = await _readKubeconfig(kubeconfigPath);
+    return config.currentContext;
   }
 
   Stream<String> streamLogs({
