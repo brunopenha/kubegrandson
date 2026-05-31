@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kubegrandson/core/utils/error_utils.dart';
 import 'package:kubegrandson/data/models/kubernetes/pod.dart';
@@ -205,6 +206,19 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                const Spacer(),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.upload_file),
+                  label: const Text('Open JSON Log'),
+                  onPressed: () => _openJsonLogFile(context),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: podsAsync.when(
                 data: (pods) {
@@ -218,14 +232,15 @@ class HomeScreen extends ConsumerWidget {
 
                   return Column(
                     children: [
-                      if (selectedPodNames.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                          child: Row(
-                            children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Row(
+                          children: [
+                            if (selectedPodNames.isNotEmpty)
                               Text(
                                   '${selectedPodNames.length} pod(s) selected'),
-                              const Spacer(),
+                            const Spacer(),
+                            if (selectedPodNames.isNotEmpty) ...[
                               OutlinedButton.icon(
                                 icon: const Icon(Icons.article),
                                 label: const Text('View Selected Logs'),
@@ -247,8 +262,9 @@ class HomeScreen extends ConsumerWidget {
                                 },
                               ),
                             ],
-                          ),
+                          ],
                         ),
+                      ),
                       Expanded(
                         child: ListView.builder(
                           itemCount: podGroups.length,
@@ -395,6 +411,24 @@ class HomeScreen extends ConsumerWidget {
         color: color,
         shape: BoxShape.circle,
       ),
+    );
+  }
+
+  Future<void> _openJsonLogFile(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Open JSON log file',
+      type: FileType.custom,
+      allowedExtensions: const ['json', 'jsonl', 'ndjson', 'log'],
+      withData: false,
+    );
+
+    final path = result?.files.single.path;
+    if (path == null || !context.mounted) return;
+
+    final fileName = result?.files.single.name ?? 'imported-json-log';
+    context.go(
+      '/logs/local/${Uri.encodeComponent(fileName)}'
+      '?importPath=${Uri.encodeComponent(path)}',
     );
   }
 }

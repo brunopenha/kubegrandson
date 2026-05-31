@@ -239,10 +239,25 @@ class LogNotifier extends StateNotifier<LogState> {
   void replaceLogs(List<LogEntry> logs) {
     state = state.copyWith(
       logs: logs,
+      isLoading: false,
+      error: null,
+      searchQuery: '',
+      traceOnly: false,
+      debugOnly: false,
+      infoOnly: false,
+      warnOnly: false,
+      errorOnly: false,
+      fatalOnly: false,
       selectedLogEntry: null,
       selectedSearchMatchIndex: -1,
     );
     _logsController.add(logs);
+  }
+
+  Future<void> loadImportedLogs(List<LogEntry> logs) async {
+    await _cancelSubscriptions();
+    _lineNumber = logs.length;
+    replaceLogs(logs);
   }
 
   void clearLogs() {
