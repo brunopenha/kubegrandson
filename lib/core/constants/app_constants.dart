@@ -14,6 +14,12 @@ class AppConstants {
   static const String maxLogLinesKey = 'max_log_lines';
   static const String autoScrollKey = 'auto_scroll';
   static const String autoRefreshIntervalSecondsKey = 'auto_refresh_interval_seconds';
+  static const String awsProfileKey = 'aws_profile';
+  static const String awsRegionKey = 'aws_region';
+  static const String awsClusterNameKey = 'aws_cluster_name';
+  static const String awsAccountIdKey = 'aws_account_id';
+  static const String awsSsoStartUrlKey = 'aws_sso_start_url';
+  static const String awsSsoRegionKey = 'aws_sso_region';
 
   // Default values
   static const int defaultMaxLogLines = 1000;

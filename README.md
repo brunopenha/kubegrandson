@@ -1,260 +1,129 @@
 # Kubegrandson
 
-![Kubegrandson](https://github.com/brunopenha/kubegrandson/raw/main/assets/icons/app64.png)
+![Kubegrandson](assets/icons/app64.png)
 
-**Kubegrandson** is a modern Flutter-based Kubernetes log viewer - the proud grandson of **Kubeson**! 🎉
+Kubegrandson is a Flutter desktop app for Kubernetes troubleshooting and log analysis.
 
-Built with Flutter and Dart, Kubegrandson brings the powerful features of Kubeson to a cross-platform, modern UI framework while maintaining the same intuitive interface developers love.
+## Beta status
 
-## 🌟 Features
+This is a beta version tested for:
 
-Kubegrandson inherits all the great features from its grandfather Kubeson:
+- Ubuntu Linux (Debian-based)
+- Windows 11 (also works on Windows 10 for installer flow)
 
-- ✅ Select Kubernetes namespace
-- ✅ Log level filters (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)
-- ✅ Multiple tabs to visualize multiple pods simultaneously
-- ✅ Multiple pods in a single tab
-- ✅ Search engine with text highlight
-- ✅ Logs by APP Label (automatic log restart when pod restarts)
-- ✅ Logs colored by log level
-- ✅ JSON viewer with collapsible arrays and objects
-- ✅ JSON viewer automatically collapses arrays with more than 4 elements
-- ✅ Escaped JSON strings are automatically parsed and displayed as JSON
-- ✅ Clear logs button
-- ✅ Stop log feed button
-- ✅ Stop log feed and continue in a new tab (for easy comparison)
-- ✅ Big JSON fields are hidden (configurable threshold)
-- ✅ Export all log lines
-- ✅ Export searched log lines
-- ✅ Drag and drop log files
+## Main changes in this beta
 
-## 🆕 New Features in Kubegrandson
+### 1) Offline JSON log import
 
-- 🎨 Modern Material Design 3 UI
-- 🖥️ Enhanced desktop experience
-- ⚡ Improved performance with Flutter
-- 🔄 Better state management
-- 📱 Potential for mobile support in the future
+You can import an external JSON log file and inspect it offline.
 
-## 📸 Screenshots
+![Offline JSON log import](https://private-user-images.githubusercontent.com/2098810/600970475-3b8ea77c-a741-4011-b991-f5ee1a46132e.png)
 
-### Checking the default minikube configuration
+### 2) Kubernetes context switch (minikube / AWS EKS)
 
-![Checking the default minikube configuration](assets/screenshots/checking-default-minikube-configuration.png)
+You can switch Kubernetes context from the UI. For AWS EKS, local AWS access must already be available.
 
-### Selecting which pods you want to see the log
+![Context selector](assets/screenshots/beta-context-selector-eks-minikube.png)
 
-![Selecting which pods you want to see the log](assets/screenshots/selecting-pods-for-logs.png)
+When using EKS, make sure the selected kubeconfig file points to the right `.kube/config`.
 
-### Log reading four pods at the same time
-![Log reading four pods at the same time](assets/screenshots/reading-four-pod-logs.png)
+![Home context view](assets/screenshots/beta-home-minikube-context.png)
 
-## 🚀 Getting Started
+### 3) Add troubleshooting markers in the log
 
-### Prerequisites
+You can add log markers without clearing the current log stream.
 
-- Flutter SDK 3.0 or higher
-- Dart SDK 3.0 or higher
-- Linux desktop build tools when running on Ubuntu/Debian:
-  ```shell
-  sudo apt update
-  sudo apt install clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev liblzma-dev mesa-utils libsecret-1-dev lld
-  ```
-- Access to a Kubernetes cluster (minikube, kind, or remote cluster)
-- Valid kubeconfig file in `~/.kube/config`
+![Log marker](https://private-user-images.githubusercontent.com/2098810/599717027-d5745ab3-3e37-4ee9-ba6b-c0c0414d4f56.png)
 
-### Installation
+### 4) Non-JSON log rendering
 
-1. Clone the repository:
-   ```shell
-   git clone https://github.com/brunopenha/kubegrandson.git
-   cd kubegrandson
-   ```
+Logs that are not JSON are still supported and visualized correctly.
 
-2. Install Flutter dependencies:
-   ```shell
-   flutter pub get
-   ```
+![Non-JSON logs](https://private-user-images.githubusercontent.com/2098810/599717417-fe8c449b-2d63-4471-b7ed-7ef7f66dca43.png)
 
-3. Verify Linux desktop support is ready:
-   ```shell
-   flutter doctor -v
-   ```
+### 5) Deployment and ConfigMap inspection/editing
 
-   If Flutter reports `CMake is required for Linux development`, install the Ubuntu packages listed in the prerequisites section and run `flutter doctor -v` again.
+You can open and edit Deployment and ConfigMap data related to selected pods.
 
-   If the Linux build fails inside `flutter_secure_storage_linux` with `json.hpp` errors like this:
+![Deployment and ConfigMap editor](https://private-user-images.githubusercontent.com/2098810/599721888-8993fae3-b05f-4f97-8289-5d6f6b585cfb.png)
 
-   ```text
-   error: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Werror,-Wdeprecated-literal-operator]
-   ```
+### 6) AWS auth flow improvements
 
-   refresh the Flutter dependencies so the project uses a Linux plugin version compatible with newer Clang/LLVM toolchains:
+- Dedicated AWS settings section for profile, region, cluster, account, and SSO metadata
+- Explicit AWS unauthorized guidance in the UI
+- Retry flow for expired EKS credentials
 
-   ```shell
-   flutter clean
-   flutter pub get
-   ```
+![AWS unauthorized guidance](assets/screenshots/beta-aws-unauthorized-guidance.png)
 
-   If the Linux build fails with a linker error like this:
+Legacy 401 view (before the updated guidance):
 
-   ```text
-   ERROR: Target dart_build failed: Error: Failed to find any of [ld.lld, ld] in LocalDirectory: '/usr/lib/llvm-21/bin'
-   ```
+![AWS 401 legacy view](assets/screenshots/beta-aws-401-legacy.png)
 
-   install LLVM's linker package:
+## Kubernetes and AWS configuration
 
-   ```shell
-   sudo apt install lld
-   ```
+In **Settings**, configure:
 
-   On Ubuntu versions that package LLVM tools by major version, this can also be fixed with:
+- `Kubeconfig File` (used by the app for initialization and context switching)
+- AWS EKS fields (profile, region, cluster, account, SSO URL, SSO region)
 
-   ```shell
-   sudo apt install lld-21
-   ```
+Then click **SSO Login & Update kubeconfig** to run the AWS refresh flow from the app.
 
-   If the build fails with a Snap path like this:
+Security note:
 
-   ```text
-   Failed to find any of [ld.lld, ld] in LocalDirectory: '/snap/flutter/.../usr/lib/llvm-10/bin'
-   ```
+- Do not store or share raw temporary AWS access key/secret/session token values in docs or screenshots.
+- Use profile-based SSO where possible.
 
-   the Flutter Snap package is missing the linker inside its read-only toolchain directory. Installing `lld` with `apt` might not fix that because the failing lookup is inside `/snap/flutter/...`.
+## Installation
 
-   Recommended fix: remove the Snap Flutter package and install Flutter from the official SDK/git distribution instead:
+### Ubuntu (Debian-based)
 
-   ```shell
-   sudo snap remove flutter
-   mkdir -p ~/dev
-   git clone https://github.com/flutter/flutter.git -b stable ~/dev/flutter
-   echo 'export PATH="$HOME/dev/flutter/bin:$PATH"' >> ~/.bashrc
-   source ~/.bashrc
-   hash -r
-   flutter doctor -v
-   ```
+Install with package manager (UI):
 
-   Confirm that Flutter and Dart no longer come from Snap:
+![Ubuntu package install](https://private-user-images.githubusercontent.com/2098810/589718108-890dd233-2b84-434e-aec8-7634a247e79d.png)
 
-   ```shell
-   which flutter
-   which dart
-   ```
+Install from terminal:
 
-   Both commands should point to `~/dev/flutter/bin/...`, not `/snap/...`.
-
-4. Run the app on Linux:
-   ```shell
-   flutter clean
-   flutter pub get
-   flutter run -d linux
-   ```
-
-## 🏗️ Generating Desktop Builds
-
-Flutter desktop support must be enabled before producing release builds:
-
-```shell
-flutter config --enable-linux-desktop
-flutter config --enable-windows-desktop
-flutter doctor -v
+```bash
+sudo apt install kubegrandson_0.0.2_amd64.deb
 ```
 
-### Linux
+Uninstall:
 
-Install the Linux desktop dependencies listed in the prerequisites section, then run:
-
-```shell
-flutter clean
-flutter pub get
-flutter build linux --release
-```
-
-The release bundle is generated at:
-
-```text
-build/linux/x64/release/bundle/
+```bash
+sudo apt remove kubegrandson
 ```
 
 ### Windows
 
-Windows builds must be generated on Windows. Install Flutter, Visual Studio with the
-"Desktop development with C++" workload, and then run:
+Run `kubegrandson_setup.exe` to install on Windows 10/11.
 
-```powershell
-flutter clean
+Windows SmartScreen can show a warning for unsigned internal builds:
+
+- Click `More info`
+- Click `Run anyway`
+
+Uninstall options:
+
+1. Settings -> Apps -> Installed apps -> Kubegrandson -> Uninstall
+2. Control Panel -> Programs -> Uninstall a program -> Kubegrandson
+3. Start Menu -> Kubegrandson -> Uninstall Kubegrandson
+
+During uninstall, if asked about user data:
+
+| Choice | Result |
+| --- | --- |
+| No (default) | Removes binaries only, keeps user data under `%LOCALAPPDATA%` / `%APPDATA%` |
+| Yes | Removes binaries and user data folders |
+
+## Development
+
+```bash
 flutter pub get
-flutter build windows --release
+flutter run -d windows
 ```
 
-The release bundle is generated at:
+or
 
-```text
-build\windows\x64\runner\Release\
+```bash
+flutter run -d linux
 ```
-
-#### 📦 Creating a Windows Installer with Inno Setup
-
-An [Inno Setup](https://jrsoftware.org/isinfo.php) script is provided at
-`windows/kubegrandson_setup.iss`. It packages the Flutter release bundle into a single
-self-contained `.exe` installer that uses the Kubegrandson icon throughout.
-
-**What the installer provides:**
-
-- Default installation folder: `C:\Program Files\Kubegrandson\`
-- Start Menu shortcut with the Kubegrandson icon
-- Optional Desktop shortcut (opt-in during installation)
-- A proper uninstaller registered in *Add or Remove Programs*
-- Offer to launch the app immediately after installation
-
-**Steps to generate the installer:**
-
-1. Build the Flutter Windows release (if not done already):
-
-   ```powershell
-   flutter build windows --release
-   ```
-
-2. Download and install **Inno Setup 6** (free) from:
-   <https://jrsoftware.org/isdl.php>
-
-3. Compile the installer script from the project root:
-
-   ```powershell
-   iscc windows\kubegrandson_setup.iss
-   ```
-
-   Alternatively, open `windows\kubegrandson_setup.iss` in the Inno Setup IDE and
-   press **Ctrl+F9** (Build).
-
-4. The ready-to-distribute installer is generated at:
-
-   ```text
-   build\windows\installer\kubegrandson_setup.exe
-   ```
-
-5. Run `kubegrandson_setup.exe` on any Windows 10/11 machine to install Kubegrandson.
-
-> **Note:** No code-signing certificate is required for personal or internal use.
-> Windows SmartScreen may show a warning the first time the unsigned installer is run —
-> click *More info → Run anyway* to proceed.
-
-#### 🗑️ Uninstalling Kubegrandson
-
-The installer registers a standard Windows uninstaller. You can remove the app in any of
-the usual ways:
-
-- **Settings → Apps → Installed apps** — search for *Kubegrandson* and click *Uninstall*
-- **Control Panel → Programs → Uninstall a program** — double-click *Kubegrandson*
-- **Start Menu → Kubegrandson → Uninstall Kubegrandson**
-
-**User-data prompt**
-
-When the uninstaller starts it asks whether you also want to delete your personal
-application data (saved settings, kubeconfig cache, and stored credentials kept by
-`flutter_secure_storage`):
-
-| Answer | Effect |
-|--------|--------|
-| **No** *(default)* | Removes only the program files. Your data in `%LOCALAPPDATA%\Kubegrandson` and `%APPDATA%\Kubegrandson` is preserved so a reinstall picks it up automatically. |
-| **Yes** | Removes the program files **and** wipes both data folders completely. Choose this for a clean removal. |

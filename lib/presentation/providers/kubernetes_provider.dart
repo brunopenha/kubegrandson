@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/datasources/local_storage_client.dart';
 import '../../data/models/app_state/cluster_context.dart';
 import '../../data/models/kubernetes/config_map.dart';
 import '../../data/models/kubernetes/deployment.dart';
@@ -12,8 +13,14 @@ import 'settings_notifier.dart';
 
 final initializeProvider = FutureProvider<void>((ref) async {
   final service = ref.watch(kubernetesServiceProvider);
-  // Use default path or file picker path
-  await service.initialize();
+  final storage = await LocalStorageClient.getInstance();
+  final kubeconfigPath = await storage.getKubeConfigPath();
+  await service.initialize(
+    kubeconfigPath: (kubeconfigPath == null || kubeconfigPath.trim().isEmpty)
+        ? null
+        : kubeconfigPath.trim(),
+    verifyConnection: false,
+  );
 });
 
 final kubernetesServiceProvider = Provider<KubernetesService>((ref) {
@@ -29,7 +36,6 @@ final namespacesProvider = FutureProvider<List<String>>((ref) async {
 });
 
 final contextsProvider = FutureProvider<List<ClusterContext>>((ref) async {
-  await ref.watch(initializeProvider.future); // wait until init completes
   final service = ref.watch(kubernetesServiceProvider);
   return service.fetchContexts();
 });

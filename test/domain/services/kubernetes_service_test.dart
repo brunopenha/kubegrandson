@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element, unused_element_parameter
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -10,7 +12,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:kubegrandson/domain/services/kubernetes_service.dart';
 import 'package:kubegrandson/data/models/kubernetes/pod.dart' as models;
 import 'package:kubegrandson/core/utils/app_logger.dart';
-
 
 class MockKubernetes extends Mock implements k8s.Kubernetes {}
 
@@ -37,10 +38,22 @@ class _FakeObjectMeta extends Fake implements k8s.V1ObjectMeta {
   final String? name;
   @override
   final String? namespace;
+  @override
+  final String? uid;
+  @override
+  final DateTime? creationTimestamp;
+  @override
+  final Map<String, String>? labels;
+  @override
+  final Map<String, String>? annotations;
 
   _FakeObjectMeta({
     this.name,
     this.namespace,
+    this.uid,
+    this.creationTimestamp,
+    this.labels,
+    this.annotations,
   });
 }
 
@@ -70,21 +83,32 @@ class _FakePodStatus extends Fake implements k8s.V1PodStatus {
   final String? phase;
   @override
   final List<k8s.V1ContainerStatus>? containerStatuses;
+  @override
+  final String? podIP;
 
   _FakePodStatus({
     this.phase,
     this.containerStatuses,
+    this.podIP,
   });
 }
 
+class _FakePodSpec extends Fake implements k8s.V1PodSpec {
+  @override
+  final String? nodeName;
+
+  _FakePodSpec({this.nodeName});
+}
 
 class _FakePod extends Fake implements k8s.V1Pod {
   @override
   final k8s.V1ObjectMeta? metadata;
   @override
   final k8s.V1PodStatus? status;
+  @override
+  final k8s.V1PodSpec? spec;
 
-  _FakePod({this.metadata, this.status});
+  _FakePod({this.metadata, this.status, this.spec});
 }
 
 class _FakePodList extends Fake implements k8s.V1PodList {
@@ -186,10 +210,15 @@ void main() {
 
       await service.initialize();
 
-      verifyNever(() => kubernetes.initFromFile('/home/test/.kube/config',
-          validateConfig: any(named: 'validateConfig'),
-          throwExceptions: any(named: 'throwExceptions')))
-          .called(0);
+      final verifyInit = verify(() => kubernetes.initFromFile(
+            captureAny(),
+            validateConfig: any(named: 'validateConfig'),
+            throwExceptions: any(named: 'throwExceptions'),
+          ));
+      verifyInit.called(1);
+      final resolvedPath =
+          (verifyInit.captured.single as String).replaceAll('\\', '/');
+      expect(resolvedPath, '/home/test/.kube/config');
     });
 
     test('rethrow em caso de erro', () async {
@@ -214,27 +243,27 @@ void main() {
   group('KubernetesService.fetchPods', () {
     test('namespace=all chama listPodForAllNamespaces e mapeia defaults',
         () async {
-          final core = MockCoreV1Api();
-          final client = MockApiClient();
-          final dio = Dio();
+      final core = MockCoreV1Api();
+      final client = MockApiClient();
+      final dio = Dio();
 
-          when(() => client.dio).thenReturn(dio);
+      when(() => client.dio).thenReturn(dio);
 
-          final podList = _FakePodList(items: [
-            _FakePod(
-              metadata: _FakeObjectMeta(),
-              status: _FakePodStatus(),
-            ),
-          ]);
+      final podList = _FakePodList(items: [
+        _FakePod(
+          metadata: _FakeObjectMeta(),
+          status: _FakePodStatus(),
+        ),
+      ]);
 
-          when(() => core.listPodForAllNamespaces()).thenAnswer((_) async {
-            return Response<k8s.V1PodList>(
-              data: podList,
-              requestOptions: RequestOptions(path: '/api/v1/pods'),
-            );
-          });
+      when(() => core.listPodForAllNamespaces()).thenAnswer((_) async {
+        return Response<k8s.V1PodList>(
+          data: podList,
+          requestOptions: RequestOptions(path: '/api/v1/pods'),
+        );
+      });
 
-          final service = KubernetesService(
+      final service = KubernetesService(
         client: client,
         coreV1ApiFactory: (_) => core,
       );
@@ -413,7 +442,7 @@ void main() {
         );
       } as dynamic);
 
-          final service = KubernetesService(client: client);
+      final service = KubernetesService(client: client);
 
       final names = await service.fetchNamespaces();
 
@@ -456,7 +485,7 @@ void main() {
 
       final emitted = <String>[];
       final done = Completer<void>();
-      
+
       final sub = service
           .streamLogs(namespace: 'dev', podName: 'p1', follow: true)
           .listen(
@@ -466,7 +495,7 @@ void main() {
 
       controller.add(Uint8List.fromList(utf8.encode('line1\nli')));
       controller.add(Uint8List.fromList(utf8.encode('ne2\n')));
-      
+
       // Close the controller to signal the end of the stream
       await controller.close();
 

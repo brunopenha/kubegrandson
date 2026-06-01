@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kubegrandson/core/utils/error_utils.dart';
+import 'package:kubegrandson/data/datasources/local_storage_client.dart';
 import 'package:kubegrandson/data/models/kubernetes/pod.dart';
 import 'package:kubegrandson/presentation/widgets/common/cluster_offline.dart';
 
@@ -27,6 +28,11 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('KubeGrandson - Kubernetes Log Viewer'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.cloud_sync),
+            tooltip: 'AWS Credentials',
+            onPressed: () => _promptAwsSsoRefresh(context, ref),
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => context.go('/settings'),
@@ -353,16 +359,28 @@ class HomeScreen extends ConsumerWidget {
                 // error: (error, _) => Center(
                 //   child: Text('Error: $error'),
                 // ),
-                error: (error, _) => isClusterOfflineError(error)
-                    ? ClusterOffline(
-                        onRetry: () {
-                          ref.invalidate(initializeProvider);
-                          refreshKubernetesResources(ref);
-                        },
-                      )
-                    : Center(
-                        child: Text('Error: $error'),
-                      )),
+                error: (error, _) {
+                  if (isAwsUnauthorizedError(error)) {
+                    return _AwsUnauthorized(
+                      errorMessage: error.toString(),
+                      onRefreshCredentials: () =>
+                          _promptAwsSsoRefresh(context, ref),
+                    );
+                  }
+
+                  if (isClusterOfflineError(error)) {
+                    return ClusterOffline(
+                      onRetry: () {
+                        ref.invalidate(initializeProvider);
+                        refreshKubernetesResources(ref);
+                      },
+                    );
+                  }
+
+                  return Center(
+                    child: Text('Error: $error'),
+                  );
+                }),
           ),
         ],
       ),
@@ -394,6 +412,309 @@ class HomeScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+Future<void> _promptAwsSsoRefresh(BuildContext context, WidgetRef ref) async {
+  final service = ref.read(kubernetesServiceProvider);
+  final storage = await LocalStorageClient.getInstance();
+  final info = service.currentAwsEksContextInfo;
+  final defaultProfile = (await storage.getAwsProfile()) ??
+      (await service.getCurrentAwsProfile()) ??
+      '';
+  final defaultRegion = (await storage.getAwsRegion()) ?? info?.region ?? '';
+  final defaultCluster =
+      (await storage.getAwsClusterName()) ?? info?.clusterName ?? '';
+  final defaultAccount =
+      (await storage.getAwsAccountId()) ?? info?.accountId ?? '';
+  final defaultSsoStartUrl = (await storage.getAwsSsoStartUrl()) ?? '';
+  final defaultSsoRegion = (await storage.getAwsSsoRegion()) ?? defaultRegion;
+
+  if (!context.mounted) {
+    return;
+  }
+
+  final values = await showDialog<_AwsCredentialsInput>(
+    context: context,
+    builder: (dialogContext) {
+      return _AwsCredentialsDialog(
+        initial: _AwsCredentialsInput(
+          profile: defaultProfile,
+          region: defaultRegion,
+          clusterName: defaultCluster,
+          accountId: defaultAccount,
+          ssoStartUrl: defaultSsoStartUrl,
+          ssoRegion: defaultSsoRegion,
+        ),
+        contextName: info?.contextName,
+      );
+    },
+  );
+
+  if (values == null || !context.mounted) {
+    return;
+  }
+  if (values.profile.isEmpty ||
+      values.region.isEmpty ||
+      values.clusterName.isEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile, region, and cluster name are required.'),
+        ),
+      );
+    }
+    return;
+  }
+
+  try {
+    await service.refreshAwsSsoCredentials(
+      profile: values.profile,
+      region: values.region,
+      clusterName: values.clusterName,
+      accountId: values.accountId.isEmpty ? null : values.accountId,
+    );
+    await storage.setAwsProfile(values.profile);
+    await storage.setAwsRegion(values.region);
+    await storage.setAwsClusterName(values.clusterName);
+    await storage.setAwsAccountId(values.accountId);
+    await storage.setAwsSsoStartUrl(values.ssoStartUrl);
+    await storage.setAwsSsoRegion(values.ssoRegion);
+
+    ref.invalidate(initializeProvider);
+    refreshKubernetesResources(ref);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'AWS credentials refreshed with profile "${values.profile}".',
+          ),
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('AWS credential refresh failed: $e'),
+        ),
+      );
+    }
+  }
+}
+
+class _AwsCredentialsInput {
+  final String profile;
+  final String region;
+  final String clusterName;
+  final String accountId;
+  final String ssoStartUrl;
+  final String ssoRegion;
+
+  const _AwsCredentialsInput({
+    required this.profile,
+    required this.region,
+    required this.clusterName,
+    required this.accountId,
+    required this.ssoStartUrl,
+    required this.ssoRegion,
+  });
+}
+
+class _AwsCredentialsDialog extends StatefulWidget {
+  final _AwsCredentialsInput initial;
+  final String? contextName;
+
+  const _AwsCredentialsDialog({
+    required this.initial,
+    this.contextName,
+  });
+
+  @override
+  State<_AwsCredentialsDialog> createState() => _AwsCredentialsDialogState();
+}
+
+class _AwsCredentialsDialogState extends State<_AwsCredentialsDialog> {
+  late final TextEditingController _profileController;
+  late final TextEditingController _regionController;
+  late final TextEditingController _clusterController;
+  late final TextEditingController _accountController;
+  late final TextEditingController _ssoStartUrlController;
+  late final TextEditingController _ssoRegionController;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileController = TextEditingController(text: widget.initial.profile);
+    _regionController = TextEditingController(text: widget.initial.region);
+    _clusterController =
+        TextEditingController(text: widget.initial.clusterName);
+    _accountController = TextEditingController(text: widget.initial.accountId);
+    _ssoStartUrlController =
+        TextEditingController(text: widget.initial.ssoStartUrl);
+    _ssoRegionController =
+        TextEditingController(text: widget.initial.ssoRegion);
+  }
+
+  @override
+  void dispose() {
+    _profileController.dispose();
+    _regionController.dispose();
+    _clusterController.dispose();
+    _accountController.dispose();
+    _ssoStartUrlController.dispose();
+    _ssoRegionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('AWS Credentials'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.contextName != null && widget.contextName!.isNotEmpty)
+                Text('Current context: ${widget.contextName}'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _profileController,
+                decoration: const InputDecoration(
+                  labelText: 'AWS Profile *',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _regionController,
+                decoration: const InputDecoration(
+                  labelText: 'AWS Region *',
+                  hintText: 'your-region',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _clusterController,
+                decoration: const InputDecoration(
+                  labelText: 'EKS Cluster Name *',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _accountController,
+                decoration: const InputDecoration(
+                  labelText: 'AWS Account ID (Optional)',
+                  hintText: 'your-12-digit-account-id',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _ssoStartUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'SSO Start URL (Optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _ssoRegionController,
+                decoration: const InputDecoration(
+                  labelText: 'SSO Region (Optional)',
+                  hintText: 'your-sso-region',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () {
+            Navigator.of(context).pop(
+              _AwsCredentialsInput(
+                profile: _profileController.text.trim(),
+                region: _regionController.text.trim(),
+                clusterName: _clusterController.text.trim(),
+                accountId: _accountController.text.trim(),
+                ssoStartUrl: _ssoStartUrlController.text.trim(),
+                ssoRegion: _ssoRegionController.text.trim(),
+              ),
+            );
+          },
+          icon: const Icon(Icons.login),
+          label: const Text('SSO Login & Update'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AwsUnauthorized extends StatelessWidget {
+  final String errorMessage;
+  final Future<void> Function() onRefreshCredentials;
+
+  const _AwsUnauthorized({
+    required this.errorMessage,
+    required this.onRefreshCredentials,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.lock_open,
+              color: AppColors.warning,
+              size: 56,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'AWS Session Expired',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Use AWS SSO login to refresh credentials for the current EKS context.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () {
+                onRefreshCredentials();
+              },
+              icon: const Icon(Icons.login),
+              label: const Text('Refresh AWS Credentials'),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              errorMessage,
+              style: const TextStyle(fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
