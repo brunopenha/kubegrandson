@@ -14,6 +14,7 @@ class KubeDeployment {
   final DateTime? creationTimestamp;
   final Map<String, String>? labels;
   final Map<String, String>? annotations;
+  final Map<String, String>? selectorLabels;
   final DeploymentStrategy? strategy;
 
   KubeDeployment({
@@ -27,7 +28,9 @@ class KubeDeployment {
     this.creationTimestamp,
     this.labels,
     this.annotations,
-    this.strategy, required updatedReplicas,
+    this.selectorLabels,
+    this.strategy,
+    required updatedReplicas,
   });
 
   factory KubeDeployment.fromJson(Map<String, dynamic> json) =>
@@ -35,7 +38,41 @@ class KubeDeployment {
 
   Map<String, dynamic> toJson() => _$KubeDeploymentToJson(this);
 
-  bool get isFullyAvailable => readyReplicas == replicas && unavailableReplicas == 0;
+  static List<KubeDeployment> fromList(List<dynamic> data, String namespace) {
+    return data.map((json) {
+      final metadata = json['metadata'] as Map<String, dynamic>? ?? const {};
+      final spec = json['spec'] as Map<String, dynamic>? ?? const {};
+      final selector = spec['selector'] as Map<String, dynamic>? ?? const {};
+      final status = json['status'] as Map<String, dynamic>? ?? const {};
+      return KubeDeployment(
+        name: metadata['name']?.toString() ?? 'Unknown',
+        namespace: metadata['namespace']?.toString() ?? namespace,
+        uid: metadata['uid']?.toString(),
+        replicas: spec['replicas'] as int? ?? 0,
+        readyReplicas: status['readyReplicas'] as int? ?? 0,
+        availableReplicas: status['availableReplicas'] as int? ?? 0,
+        unavailableReplicas: status['unavailableReplicas'] as int? ?? 0,
+        creationTimestamp: metadata['creationTimestamp'] == null
+            ? null
+            : DateTime.tryParse(metadata['creationTimestamp'].toString()),
+        labels: (metadata['labels'] as Map?)?.cast<String, String>(),
+        annotations: (metadata['annotations'] as Map?)?.cast<String, String>(),
+        selectorLabels:
+            (selector['matchLabels'] as Map?)?.cast<String, String>(),
+        updatedReplicas: status['updatedReplicas'] as int? ?? 0,
+      );
+    }).toList();
+  }
+
+  bool get isFullyAvailable =>
+      readyReplicas == replicas && unavailableReplicas == 0;
+
+  bool matchesPodLabels(Map<String, String>? podLabels) {
+    final selector = selectorLabels;
+    if (selector == null || selector.isEmpty) return false;
+    final labels = podLabels ?? const <String, String>{};
+    return selector.entries.every((entry) => labels[entry.key] == entry.value);
+  }
 
   String get statusText => '$readyReplicas/$replicas';
 

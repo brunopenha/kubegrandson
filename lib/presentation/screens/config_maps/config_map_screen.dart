@@ -78,7 +78,7 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
                   final relatedDeployments = _relatedByLabels(
                     deployments,
                     relatedPods,
-                    (deployment) => deployment.labels,
+                    (deployment) => deployment.selectorLabels,
                   );
 
                   if (relatedConfigMaps.isNotEmpty) {
