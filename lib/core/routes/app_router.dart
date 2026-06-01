@@ -24,12 +24,14 @@ class AppRouter {
               .map(Uri.decodeComponent)
               .toList();
           final container = state.uri.queryParameters['container'];
+          final importPath = state.uri.queryParameters['importPath'];
 
           return LogViewerScreen(
             namespace: namespace,
             podName: pod,
             podNames: pods ?? [pod],
             containerName: container,
+            initialImportPath: importPath,
           );
         },
       ),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kubegrandson/domain/services/log_export_service.dart';
+import 'package:kubegrandson/domain/services/log_import_service.dart';
 import 'package:kubegrandson/presentation/providers/settings_notifier.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -20,6 +21,7 @@ class LogViewerScreen extends ConsumerStatefulWidget {
   final String podName;
   final List<String> podNames;
   final String? containerName;
+  final String? initialImportPath;
 
   const LogViewerScreen({
     super.key,
@@ -27,6 +29,7 @@ class LogViewerScreen extends ConsumerStatefulWidget {
     required this.podName,
     this.podNames = const [],
     this.containerName,
+    this.initialImportPath,
   });
 
   @override
@@ -46,7 +49,12 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startLogStreaming();
+      final importPath = widget.initialImportPath;
+      if (importPath == null) {
+        _startLogStreaming();
+      } else {
+        _importJsonLogsFromPath(_podKey, importPath);
+      }
     });
   }
 
@@ -126,6 +134,12 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
             tooltip: 'Export Logs',
           ),
           IconButton(
+            icon: const Icon(Icons.upload_file, size: 20),
+            color: Colors.white70,
+            onPressed: () => _importJsonLogs(podKey),
+            tooltip: 'Open JSON Log File',
+          ),
+          IconButton(
             icon: const Icon(Icons.delete_sweep, size: 20),
             color: Colors.white70,
             onPressed: () {
@@ -137,9 +151,6 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
       ),
       body: Column(
         children: [
-          // TODO(json-log-import): Add the JSON file import/drop target here.
-          // Use LogImportService.parseJsonLogFile(content), then call:
-          // ref.read(logProvider(podKey).notifier).replaceLogs(parsedLogs);
           LogSearchBar(podKey: podKey),
           LogFilterToolbar(podKey: podKey),
           Expanded(
@@ -298,6 +309,50 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _importJsonLogs(String podKey) async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Open JSON log file',
+      type: FileType.custom,
+      allowedExtensions: const ['json', 'jsonl', 'ndjson', 'log'],
+      withData: false,
+    );
+
+    final path = result?.files.single.path;
+    if (path == null) return;
+    if (!mounted) return;
+
+    await _importJsonLogsFromPath(podKey, path);
+  }
+
+  Future<void> _importJsonLogsFromPath(String podKey, String path) async {
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final maxEntries = ref.read(settingsProvider).maxLogLines;
+
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Importing JSON logs...')),
+    );
+
+    try {
+      final logs = await LogImportService().parseJsonLogFilePath(
+        path,
+        maxEntries: maxEntries,
+      );
+
+      if (!mounted) return;
+      await ref.read(logProvider(podKey).notifier).loadImportedLogs(logs);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Imported ${logs.length} log lines')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to import JSON logs: $error')),
+      );
+    }
   }
 
   Future<void> _exportLogs(String podKey) async {
