@@ -7,11 +7,10 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k8s/k8s.dart' as k8s;
-import 'package:mocktail/mocktail.dart';
-
-import 'package:kubegrandson/domain/services/kubernetes_service.dart';
-import 'package:kubegrandson/data/models/kubernetes/pod.dart' as models;
 import 'package:kubegrandson/core/utils/app_logger.dart';
+import 'package:kubegrandson/data/models/kubernetes/pod.dart' as models;
+import 'package:kubegrandson/domain/services/kubernetes_service.dart';
+import 'package:mocktail/mocktail.dart';
 
 class MockKubernetes extends Mock implements k8s.Kubernetes {}
 
@@ -133,6 +132,24 @@ class _FakeNamespaceList extends Fake implements k8s.V1NamespaceList {
 }
 
 class _FakeContainerState extends Fake implements k8s.V1ContainerState {}
+
+class _JsonAdapter implements HttpClientAdapter {
+  final Future<ResponseBody> Function(RequestOptions options) handler;
+
+  _JsonAdapter(this.handler);
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) {
+    return handler(options);
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
 
 void main() {
   setUpAll(() {
@@ -447,6 +464,118 @@ void main() {
       final names = await service.fetchNamespaces();
 
       expect(names, ['default', 'kube-system']);
+    });
+  });
+
+  group('KubernetesService deployments', () {
+    test('fetchDeployments maps selector labels used to associate pods',
+        () async {
+      final client = MockApiClient();
+      final dio = Dio();
+      when(() => client.dio).thenReturn(dio);
+
+      dio.httpClientAdapter = _JsonAdapter((options) async {
+        expect(options.path, '/apis/apps/v1/namespaces/dev/deployments');
+        final body = jsonEncode({
+          'items': [
+            {
+              'metadata': {
+                'name': 'api',
+                'namespace': 'dev',
+                'labels': {'app.kubernetes.io/name': 'deployment-label'},
+              },
+              'spec': {
+                'replicas': 2,
+                'selector': {
+                  'matchLabels': {'app': 'api', 'tier': 'backend'},
+                },
+              },
+              'status': {'readyReplicas': 1},
+            },
+          ],
+        });
+        return ResponseBody.fromString(
+          body,
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        );
+      });
+
+      final service = KubernetesService(client: client);
+      final deployments = await service.fetchDeployments('dev');
+
+      expect(deployments, hasLength(1));
+      expect(deployments.single.name, 'api');
+      expect(deployments.single.selectorLabels, {
+        'app': 'api',
+        'tier': 'backend',
+      });
+      expect(
+        deployments.single.matchesPodLabels({
+          'app': 'api',
+          'tier': 'backend',
+          'pod-template-hash': 'abc123',
+        }),
+        isTrue,
+      );
+      expect(
+        deployments.single.matchesPodLabels({
+          'app': 'api',
+          'tier': 'frontend',
+        }),
+        isFalse,
+      );
+    });
+
+    test('read and update deployment spec use finite request timeouts',
+        () async {
+      final client = MockApiClient();
+      final dio = Dio();
+      when(() => client.dio).thenReturn(dio);
+
+      final seen = <RequestOptions>[];
+      dio.httpClientAdapter = _JsonAdapter((options) async {
+        seen.add(options);
+        if (options.method == 'GET') {
+          return ResponseBody.fromString(
+            jsonEncode({
+              'spec': {'replicas': 3},
+            }),
+            200,
+            headers: {
+              Headers.contentTypeHeader: [Headers.jsonContentType],
+            },
+          );
+        }
+        return ResponseBody.fromString(
+          '{}',
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        );
+      });
+
+      final service = KubernetesService(client: client);
+
+      final spec = await service.readDeploymentSpec(
+        namespace: 'dev',
+        name: 'api',
+      );
+      await service.updateDeploymentSpec(
+        namespace: 'dev',
+        name: 'api',
+        spec: spec,
+      );
+
+      expect(seen.map((options) => options.method), ['GET', 'PATCH']);
+      expect(seen.every((options) => options.receiveTimeout?.inSeconds == 60),
+          isTrue);
+      expect(seen.every((options) => options.sendTimeout?.inSeconds == 60),
+          isTrue);
+      expect(seen.last.contentType, 'application/merge-patch+json');
     });
   });
 

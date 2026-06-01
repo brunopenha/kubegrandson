@@ -1,6 +1,6 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kubegrandson/core/utils/error_utils.dart';
 import 'package:kubegrandson/data/datasources/local_storage_client.dart';
@@ -372,9 +372,6 @@ class HomeScreen extends ConsumerWidget {
                   );
                 },
                 loading: () => const Center(child: LoadingIndicator()),
-                // error: (error, _) => Center(
-                //   child: Text('Error: $error'),
-                // ),
                 error: (error, _) {
                   if (isAwsUnauthorizedError(error)) {
                     return _AwsUnauthorized(

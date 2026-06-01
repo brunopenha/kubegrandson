@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+
 import '../providers/theme/app_colors.dart';
-import 'app_text_styles.dart';
 
 class AppTheme {
   static ThemeData get lightTheme {
@@ -18,7 +18,6 @@ class AppTheme {
         error: AppColors.error,
         onError: Colors.white,
       ),
-
       textTheme: const TextTheme(
         bodyLarge: TextStyle(color: AppColors.textPrimaryLight),
         bodyMedium: TextStyle(color: AppColors.textPrimaryLight),
@@ -27,8 +26,43 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceLight,
-        border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.borderLight)),
+        border: OutlineInputBorder(
+            borderSide: BorderSide(color: AppColors.borderLight)),
         labelStyle: const TextStyle(color: AppColors.textPrimaryLight),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style:
+            IconButton.styleFrom(foregroundColor: AppColors.textPrimaryLight),
+      ),
+      checkboxTheme: _checkboxTheme(
+        active: AppColors.primaryLight,
+        check: Colors.white,
+        border: AppColors.textPrimaryLight,
+      ),
+      radioTheme: _radioTheme(
+        active: AppColors.primaryLight,
+        border: AppColors.textPrimaryLight,
+      ),
+      switchTheme: _switchTheme(
+        thumb: AppColors.primaryLight,
+        track: AppColors.borderLight,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: AppColors.primaryLight,
+          disabledForegroundColor: AppColors.textSecondary,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimaryLight,
+          side: const BorderSide(color: AppColors.textPrimaryLight),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style:
+            TextButton.styleFrom(foregroundColor: AppColors.textPrimaryLight),
       ),
     );
   }
@@ -56,9 +90,88 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceDark,
-        border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+        border:
+            OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
         labelStyle: const TextStyle(color: AppColors.textPrimary),
       ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(foregroundColor: AppColors.textPrimary),
+      ),
+      checkboxTheme: _checkboxTheme(
+        active: AppColors.primary,
+        check: Colors.white,
+        border: AppColors.textPrimary,
+      ),
+      radioTheme: _radioTheme(
+        active: AppColors.primary,
+        border: AppColors.textPrimary,
+      ),
+      switchTheme: _switchTheme(
+        thumb: AppColors.primary,
+        track: AppColors.border,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: AppColors.primary,
+          disabledForegroundColor: AppColors.textSecondary,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          side: const BorderSide(color: AppColors.textPrimary),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: AppColors.textPrimary),
+      ),
+    );
+  }
+
+  static CheckboxThemeData _checkboxTheme({
+    required Color active,
+    required Color check,
+    required Color border,
+  }) {
+    return CheckboxThemeData(
+      fillColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return active;
+        return Colors.transparent;
+      }),
+      checkColor: WidgetStateProperty.all(check),
+      side: BorderSide(color: border, width: 1.5),
+    );
+  }
+
+  static RadioThemeData _radioTheme({
+    required Color active,
+    required Color border,
+  }) {
+    return RadioThemeData(
+      fillColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return active;
+        return border;
+      }),
+    );
+  }
+
+  static SwitchThemeData _switchTheme({
+    required Color thumb,
+    required Color track,
+  }) {
+    return SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return thumb;
+        return Colors.white;
+      }),
+      trackColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return thumb.withValues(alpha: 0.45);
+        }
+        return track;
+      }),
+      trackOutlineColor: WidgetStateProperty.all(track),
     );
   }
 }

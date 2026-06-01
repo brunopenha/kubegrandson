@@ -13,7 +13,7 @@
 ; ============================================================
 
 #define MyAppName      "Kubegrandson"
-#define MyAppVersion   "0.0.7"
+#define MyAppVersion   "0.0.8"
 #define MyAppPublisher "Bruno Penha"
 #define MyAppURL       "https://github.com/brunopenha/kubegrandson"
 #define MyAppExeName   "kubegrandson.exe"
@@ -48,7 +48,8 @@ UninstallDisplayName={#MyAppName}
 
 ; Output
 OutputDir=..\build\windows\installer
-OutputBaseFilename=kubegrandson_setup
+; kubegrandson_installer_0.0.7_amd64_windows.exe
+OutputBaseFilename=kubegrandson_installer_{#MyAppVersion}_amd64_windows
 
 ; Compression
 Compression=lzma2/ultra64

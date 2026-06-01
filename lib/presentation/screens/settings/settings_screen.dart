@@ -305,103 +305,103 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 32),
-          _buildSection(
-            'AWS EKS Authentication',
-            [
-              _buildSetting(
-                'AWS Profile',
-                TextField(
-                  controller: _awsProfileController,
-                  decoration: const InputDecoration(
-                    labelText: 'Profile *',
-                    hintText: 'your-aws-profile',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSetting(
-                'AWS Region',
-                TextField(
-                  controller: _awsRegionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Region *',
-                    hintText: 'your-region',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSetting(
-                'EKS Cluster Name',
-                TextField(
-                  controller: _awsClusterController,
-                  decoration: const InputDecoration(
-                    labelText: 'Cluster Name *',
-                    hintText: 'your-eks-cluster',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSetting(
-                'AWS Account ID',
-                TextField(
-                  controller: _awsAccountIdController,
-                  decoration: const InputDecoration(
-                    labelText: 'Account ID (Optional)',
-                    hintText: 'your-12-digit-account-id',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSetting(
-                'SSO Start URL',
-                TextField(
-                  controller: _awsSsoStartUrlController,
-                  decoration: const InputDecoration(
-                    labelText: 'SSO Start URL (Optional)',
-                    hintText: 'https://your-sso-start-url',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSetting(
-                'SSO Region',
-                TextField(
-                  controller: _awsSsoRegionController,
-                  decoration: const InputDecoration(
-                    labelText: 'SSO Region (Optional)',
-                    hintText: 'your-sso-region',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _saveAwsSettings,
-                    icon: const Icon(Icons.save),
-                    label: const Text('Save AWS Settings'),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    onPressed: _isAwsRefreshing ? null : _refreshAwsCredentials,
-                    icon: const Icon(Icons.login),
-                    label: Text(
-                      _isAwsRefreshing
-                          ? 'Refreshing...'
-                          : 'SSO Login & Update kubeconfig',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          // const SizedBox(height: 32),
+          // _buildSection(
+          //   'AWS EKS Authentication',
+          //   [
+          //     _buildSetting(
+          //       'AWS Profile',
+          //       TextField(
+          //         controller: _awsProfileController,
+          //         decoration: const InputDecoration(
+          //           labelText: 'Profile *',
+          //           hintText: 'your-aws-profile',
+          //           border: OutlineInputBorder(),
+          //         ),
+          //       ),
+          //     ),
+          //     const SizedBox(height: 12),
+          //     _buildSetting(
+          //       'AWS Region',
+          //       TextField(
+          //         controller: _awsRegionController,
+          //         decoration: const InputDecoration(
+          //           labelText: 'Region *',
+          //           hintText: 'your-region',
+          //           border: OutlineInputBorder(),
+          //         ),
+          //       ),
+          //     ),
+          //     const SizedBox(height: 12),
+          //     _buildSetting(
+          //       'EKS Cluster Name',
+          //       TextField(
+          //         controller: _awsClusterController,
+          //         decoration: const InputDecoration(
+          //           labelText: 'Cluster Name *',
+          //           hintText: 'your-eks-cluster',
+          //           border: OutlineInputBorder(),
+          //         ),
+          //       ),
+          //     ),
+          //     const SizedBox(height: 12),
+          //     _buildSetting(
+          //       'AWS Account ID',
+          //       TextField(
+          //         controller: _awsAccountIdController,
+          //         decoration: const InputDecoration(
+          //           labelText: 'Account ID (Optional)',
+          //           hintText: 'your-12-digit-account-id',
+          //           border: OutlineInputBorder(),
+          //         ),
+          //       ),
+          //     ),
+          //     const SizedBox(height: 12),
+          //     _buildSetting(
+          //       'SSO Start URL',
+          //       TextField(
+          //         controller: _awsSsoStartUrlController,
+          //         decoration: const InputDecoration(
+          //           labelText: 'SSO Start URL (Optional)',
+          //           hintText: 'https://your-sso-start-url',
+          //           border: OutlineInputBorder(),
+          //         ),
+          //       ),
+          //     ),
+          //     const SizedBox(height: 12),
+          //     _buildSetting(
+          //       'SSO Region',
+          //       TextField(
+          //         controller: _awsSsoRegionController,
+          //         decoration: const InputDecoration(
+          //           labelText: 'SSO Region (Optional)',
+          //           hintText: 'your-sso-region',
+          //           border: OutlineInputBorder(),
+          //         ),
+          //       ),
+          //     ),
+          //     const SizedBox(height: 12),
+          //     Row(
+          //       children: [
+          //         OutlinedButton.icon(
+          //           onPressed: _saveAwsSettings,
+          //           icon: const Icon(Icons.save),
+          //           label: const Text('Save AWS Settings'),
+          //         ),
+          //         const SizedBox(width: 12),
+          //         FilledButton.icon(
+          //           onPressed: _isAwsRefreshing ? null : _refreshAwsCredentials,
+          //           icon: const Icon(Icons.login),
+          //           label: Text(
+          //             _isAwsRefreshing
+          //                 ? 'Refreshing...'
+          //                 : 'SSO Login & Update kubeconfig',
+          //           ),
+          //         ),
+          //       ],
+          //     ),
+          //   ],
+          // ),
           const SizedBox(height: 32),
           _buildSection(
             'Appearance',

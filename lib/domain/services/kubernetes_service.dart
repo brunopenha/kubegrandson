@@ -1,14 +1,16 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:k8s/k8s.dart' as k8s;
 import 'package:kubeconfig/kubeconfig.dart' as kubeconfig;
 import 'package:path/path.dart' as p;
+
 import '../../core/utils/app_logger.dart';
 import '../../data/models/app_state/cluster_context.dart';
-import '../../data/models/kubernetes/deployment.dart' as deployments;
 import '../../data/models/kubernetes/config_map.dart' as config_maps;
+import '../../data/models/kubernetes/deployment.dart' as deployments;
 import '../../data/models/kubernetes/pod.dart' as models;
 import '../../data/models/kubernetes/service.dart' as services;
 
@@ -349,6 +351,7 @@ class KubernetesService {
       final json = item as Map<String, dynamic>;
       final metadata = json['metadata'] as Map<String, dynamic>? ?? const {};
       final spec = json['spec'] as Map<String, dynamic>? ?? const {};
+      final selector = spec['selector'] as Map<String, dynamic>? ?? const {};
       final status = json['status'] as Map<String, dynamic>? ?? const {};
       return deployments.KubeDeployment(
         name: metadata['name']?.toString() ?? 'Unknown',
@@ -363,6 +366,8 @@ class KubernetesService {
             : DateTime.tryParse(metadata['creationTimestamp'].toString()),
         labels: (metadata['labels'] as Map?)?.cast<String, String>(),
         annotations: (metadata['annotations'] as Map?)?.cast<String, String>(),
+        selectorLabels:
+            (selector['matchLabels'] as Map?)?.cast<String, String>(),
         updatedReplicas: status['updatedReplicas'] as int? ?? 0,
       );
     }).toList();
@@ -372,8 +377,14 @@ class KubernetesService {
     required String namespace,
     required String name,
   }) async {
-    final response = await _client!.dio.get<Map<String, dynamic>>(
-      '/apis/apps/v1/namespaces/$namespace/deployments/$name',
+    final response = await _withAuthRetry(
+      () => _client!.dio.get<Map<String, dynamic>>(
+        '/apis/apps/v1/namespaces/$namespace/deployments/$name',
+        options: Options(
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      ),
     );
     return (response.data?['spec'] as Map<String, dynamic>?) ??
         const <String, dynamic>{};
@@ -384,10 +395,16 @@ class KubernetesService {
     required String name,
     required Map<String, dynamic> spec,
   }) async {
-    await _client!.dio.patch<Map<String, dynamic>>(
-      '/apis/apps/v1/namespaces/$namespace/deployments/$name',
-      data: {'spec': spec},
-      options: Options(contentType: 'application/merge-patch+json'),
+    await _withAuthRetry(
+      () => _client!.dio.patch<Map<String, dynamic>>(
+        '/apis/apps/v1/namespaces/$namespace/deployments/$name',
+        data: {'spec': spec},
+        options: Options(
+          contentType: 'application/merge-patch+json',
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      ),
     );
   }
 
