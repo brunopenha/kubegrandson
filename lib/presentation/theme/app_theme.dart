@@ -74,9 +74,9 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.backgroundDark,
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primaryDark,
-        onPrimary: Colors.white,
+        onPrimary: AppColors.textPrimaryLight,
         secondary: AppColors.secondary,
-        onSecondary: Colors.white,
+        onSecondary: AppColors.textPrimaryLight,
         surface: AppColors.surfaceDark,
         onSurface: AppColors.textPrimary,
         error: AppColors.error,
@@ -115,6 +115,14 @@ class AppTheme {
           foregroundColor: Colors.white,
           backgroundColor: AppColors.primary,
           disabledForegroundColor: AppColors.textSecondary,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          foregroundColor: AppColors.textPrimaryLight,
+          backgroundColor: AppColors.primaryDark,
+          disabledForegroundColor: AppColors.textSecondary,
+          disabledBackgroundColor: AppColors.border,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(

@@ -33,6 +33,20 @@ class AwsEksContextInfo {
   });
 }
 
+class GcpGkeContextInfo {
+  final String contextName;
+  final String projectId;
+  final String location;
+  final String clusterName;
+
+  const GcpGkeContextInfo({
+    required this.contextName,
+    required this.projectId,
+    required this.location,
+    required this.clusterName,
+  });
+}
+
 class KubernetesService {
   k8s.ApiClient? _client;
   String? _kubeconfigPath;
@@ -71,6 +85,58 @@ class KubernetesService {
       return null;
     }
     return _parseAwsEksContext(contextName);
+  }
+
+  GcpGkeContextInfo? get currentGcpGkeContextInfo {
+    final contextName = _currentContextName;
+    if (contextName == null || contextName.isEmpty) {
+      return null;
+    }
+    return _parseGcpGkeContext(contextName);
+  }
+
+  Future<String?> getCurrentGcpAccount() async {
+    final result = await _processRunner('gcloud', [
+      'auth',
+      'list',
+      '--filter=status:ACTIVE',
+      '--format=value(account)',
+    ]);
+    if (result.exitCode != 0) {
+      return null;
+    }
+
+    final account = result.stdout.toString().trim().split('\n').first.trim();
+    if (account.isEmpty) {
+      return null;
+    }
+    return account;
+  }
+
+  String? getCurrentGcpLocationType() {
+    final info = currentGcpGkeContextInfo;
+    if (info == null) {
+      return null;
+    }
+    return _inferGcpLocationType(info.location);
+  }
+
+  Future<String?> getCurrentGcpProjectId() async {
+    final result = await _processRunner('gcloud', [
+      'config',
+      'get-value',
+      'project',
+      '--quiet',
+    ]);
+    if (result.exitCode != 0) {
+      return null;
+    }
+
+    final projectId = result.stdout.toString().trim();
+    if (projectId.isEmpty || projectId == '(unset)') {
+      return null;
+    }
+    return projectId;
   }
 
   Future<String?> getCurrentAwsProfile() async {
@@ -150,6 +216,80 @@ class KubernetesService {
           'arn:aws:eks:$resolvedRegion:$resolvedAccountId:cluster/$resolvedClusterName';
       await _switchContextIfPresent(contextName);
     }
+
+    await initialize(
+      kubeconfigPath: _kubeconfigPath,
+      verifyConnection: false,
+    );
+  }
+
+  Future<void> refreshGcpCredentials({
+    required String projectId,
+    required String location,
+    required String locationType,
+    required String clusterName,
+    String? account,
+  }) async {
+    final resolvedProjectId = projectId.trim();
+    final resolvedLocation = location.trim();
+    final resolvedLocationType = locationType.trim().toLowerCase();
+    final resolvedClusterName = clusterName.trim();
+    final resolvedAccount = account?.trim() ?? '';
+
+    if (resolvedProjectId.isEmpty ||
+        resolvedLocation.isEmpty ||
+        resolvedClusterName.isEmpty) {
+      throw Exception(
+        'Project ID, location, and cluster name are required to refresh GCP credentials.',
+      );
+    }
+    if (resolvedLocationType != 'zone' && resolvedLocationType != 'region') {
+      throw Exception('GCP location type must be "zone" or "region".');
+    }
+
+    final activeAccount = await getCurrentGcpAccount();
+    if (activeAccount == null || activeAccount.isEmpty) {
+      await _runProcess(
+        operationName: 'gcloud auth login',
+        executable: 'gcloud',
+        arguments: [
+          'auth',
+          'login',
+          if (resolvedAccount.isNotEmpty) resolvedAccount,
+        ],
+      );
+    } else if (resolvedAccount.isNotEmpty && activeAccount != resolvedAccount) {
+      await _runProcess(
+        operationName: 'gcloud config set account',
+        executable: 'gcloud',
+        arguments: ['config', 'set', 'account', resolvedAccount],
+      );
+    }
+
+    await _runProcess(
+      operationName: 'gcloud config set project',
+      executable: 'gcloud',
+      arguments: ['config', 'set', 'project', resolvedProjectId],
+    );
+
+    await _runProcess(
+      operationName: 'gcloud container clusters get-credentials',
+      executable: 'gcloud',
+      arguments: [
+        'container',
+        'clusters',
+        'get-credentials',
+        resolvedClusterName,
+        resolvedLocationType == 'region' ? '--region' : '--zone',
+        resolvedLocation,
+        '--project',
+        resolvedProjectId,
+      ],
+    );
+
+    final contextName =
+        'gke_${resolvedProjectId}_${resolvedLocation}_$resolvedClusterName';
+    await _switchContextIfPresent(contextName);
 
     await initialize(
       kubeconfigPath: _kubeconfigPath,
@@ -600,6 +740,24 @@ class KubernetesService {
       accountId: match.group(2)!,
       clusterName: match.group(3)!,
     );
+  }
+
+  GcpGkeContextInfo? _parseGcpGkeContext(String contextName) {
+    final match = RegExp(r'^gke_([^_]+)_([^_]+)_(.+)$').firstMatch(contextName);
+    if (match == null) {
+      return null;
+    }
+
+    return GcpGkeContextInfo(
+      contextName: contextName,
+      projectId: match.group(1)!,
+      location: match.group(2)!,
+      clusterName: match.group(3)!,
+    );
+  }
+
+  String _inferGcpLocationType(String location) {
+    return RegExp(r'-[a-z]$').hasMatch(location) ? 'zone' : 'region';
   }
 
   String? _currentContextUserName(

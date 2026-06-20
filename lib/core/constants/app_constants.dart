@@ -25,6 +25,11 @@ class AppConstants {
   static const String awsAccountIdKey = 'aws_account_id';
   static const String awsSsoStartUrlKey = 'aws_sso_start_url';
   static const String awsSsoRegionKey = 'aws_sso_region';
+  static const String gcpProjectIdKey = 'gcp_project_id';
+  static const String gcpLocationKey = 'gcp_location';
+  static const String gcpLocationTypeKey = 'gcp_location_type';
+  static const String gcpClusterNameKey = 'gcp_cluster_name';
+  static const String gcpAccountKey = 'gcp_account';
 
   // Default values
   static const int defaultMaxLogLines = 1000;

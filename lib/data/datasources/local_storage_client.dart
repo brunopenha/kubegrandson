@@ -378,6 +378,111 @@ class LocalStorageClient {
     }
   }
 
+  // GCP GKE auth settings
+  Future<String?> getGcpProjectId() async {
+    try {
+      return _prefs?.getString(AppConstants.gcpProjectIdKey);
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to get GCP project id', e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<bool> setGcpProjectId(String projectId) async {
+    try {
+      return await _prefs?.setString(
+            AppConstants.gcpProjectIdKey,
+            projectId,
+          ) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to set GCP project id', e, stackTrace);
+      return false;
+    }
+  }
+
+  Future<String?> getGcpLocation() async {
+    try {
+      return _prefs?.getString(AppConstants.gcpLocationKey);
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to get GCP location', e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<bool> setGcpLocation(String location) async {
+    try {
+      return await _prefs?.setString(AppConstants.gcpLocationKey, location) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to set GCP location', e, stackTrace);
+      return false;
+    }
+  }
+
+  Future<String?> getGcpLocationType() async {
+    try {
+      return _prefs?.getString(AppConstants.gcpLocationTypeKey);
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to get GCP location type', e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<bool> setGcpLocationType(String locationType) async {
+    try {
+      return await _prefs?.setString(
+            AppConstants.gcpLocationTypeKey,
+            locationType,
+          ) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to set GCP location type', e, stackTrace);
+      return false;
+    }
+  }
+
+  Future<String?> getGcpClusterName() async {
+    try {
+      return _prefs?.getString(AppConstants.gcpClusterNameKey);
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to get GCP cluster name', e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<bool> setGcpClusterName(String clusterName) async {
+    try {
+      return await _prefs?.setString(
+            AppConstants.gcpClusterNameKey,
+            clusterName,
+          ) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to set GCP cluster name', e, stackTrace);
+      return false;
+    }
+  }
+
+  Future<String?> getGcpAccount() async {
+    try {
+      return _prefs?.getString(AppConstants.gcpAccountKey);
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to get GCP account', e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<bool> setGcpAccount(String account) async {
+    try {
+      return await _prefs?.setString(AppConstants.gcpAccountKey, account) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to set GCP account', e, stackTrace);
+      return false;
+    }
+  }
+
   // Clear all data
   Future<bool> clearAll() async {
     try {

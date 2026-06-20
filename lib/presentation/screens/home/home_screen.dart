@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kubegrandson/core/utils/error_utils.dart';
 import 'package:kubegrandson/data/datasources/local_storage_client.dart';
@@ -30,9 +31,22 @@ class HomeScreen extends ConsumerWidget {
         title: const Text('KubeGrandson - Kubernetes Log Viewer'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.cloud_sync),
+            icon: SvgPicture.asset(
+              'assets/icons/aws_mark.svg',
+              width: 24,
+              height: 24,
+            ),
             tooltip: 'AWS Credentials',
             onPressed: () => _promptAwsSsoRefresh(context, ref),
+          ),
+          IconButton(
+            icon: SvgPicture.asset(
+              'assets/icons/gcp_mark.svg',
+              width: 24,
+              height: 24,
+            ),
+            tooltip: 'GCP Credentials',
+            onPressed: () => _promptGcpCredentialsRefresh(context, ref),
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -546,6 +560,111 @@ Future<void> _promptAwsSsoRefresh(BuildContext context, WidgetRef ref) async {
   }
 }
 
+Future<void> _promptGcpCredentialsRefresh(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final service = ref.read(kubernetesServiceProvider);
+  final storage = await LocalStorageClient.getInstance();
+  final info = service.currentGcpGkeContextInfo;
+  String? inferredAccount;
+  try {
+    inferredAccount = await service.getCurrentGcpAccount();
+  } catch (_) {
+    inferredAccount = null;
+  }
+  String? inferredProjectId;
+  try {
+    inferredProjectId = await service.getCurrentGcpProjectId();
+  } catch (_) {
+    inferredProjectId = null;
+  }
+
+  final defaultProjectId = (await storage.getGcpProjectId()) ??
+      info?.projectId ??
+      inferredProjectId ??
+      '';
+  final defaultLocation =
+      (await storage.getGcpLocation()) ?? info?.location ?? '';
+  final defaultLocationType = (await storage.getGcpLocationType()) ??
+      service.getCurrentGcpLocationType() ??
+      'zone';
+  final defaultCluster =
+      (await storage.getGcpClusterName()) ?? info?.clusterName ?? '';
+  final defaultAccount =
+      (await storage.getGcpAccount()) ?? inferredAccount ?? '';
+
+  if (!context.mounted) {
+    return;
+  }
+
+  final values = await showDialog<_GcpCredentialsInput>(
+    context: context,
+    builder: (dialogContext) {
+      return _GcpCredentialsDialog(
+        initial: _GcpCredentialsInput(
+          projectId: defaultProjectId,
+          location: defaultLocation,
+          locationType: defaultLocationType,
+          clusterName: defaultCluster,
+          account: defaultAccount,
+        ),
+        contextName: info?.contextName,
+      );
+    },
+  );
+
+  if (values == null || !context.mounted) {
+    return;
+  }
+  if (values.projectId.isEmpty ||
+      values.location.isEmpty ||
+      values.clusterName.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Project ID, location, and cluster name are required.'),
+      ),
+    );
+    return;
+  }
+
+  try {
+    await service.refreshGcpCredentials(
+      projectId: values.projectId,
+      location: values.location,
+      locationType: values.locationType,
+      clusterName: values.clusterName,
+      account: values.account.isEmpty ? null : values.account,
+    );
+    await storage.setGcpProjectId(values.projectId);
+    await storage.setGcpLocation(values.location);
+    await storage.setGcpLocationType(values.locationType);
+    await storage.setGcpClusterName(values.clusterName);
+    await storage.setGcpAccount(values.account);
+
+    ref.invalidate(initializeProvider);
+    refreshKubernetesResources(ref);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'GCP credentials refreshed for "${values.clusterName}".',
+          ),
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('GCP credential refresh failed: $e'),
+        ),
+      );
+    }
+  }
+}
+
 class _AwsCredentialsInput {
   final String profile;
   final String region;
@@ -698,6 +817,164 @@ class _AwsCredentialsDialogState extends State<_AwsCredentialsDialog> {
           },
           icon: const Icon(Icons.login),
           label: const Text('SSO Login & Update'),
+        ),
+      ],
+    );
+  }
+}
+
+class _GcpCredentialsInput {
+  final String projectId;
+  final String location;
+  final String locationType;
+  final String clusterName;
+  final String account;
+
+  const _GcpCredentialsInput({
+    required this.projectId,
+    required this.location,
+    required this.locationType,
+    required this.clusterName,
+    required this.account,
+  });
+}
+
+class _GcpCredentialsDialog extends StatefulWidget {
+  final _GcpCredentialsInput initial;
+  final String? contextName;
+
+  const _GcpCredentialsDialog({
+    required this.initial,
+    this.contextName,
+  });
+
+  @override
+  State<_GcpCredentialsDialog> createState() => _GcpCredentialsDialogState();
+}
+
+class _GcpCredentialsDialogState extends State<_GcpCredentialsDialog> {
+  late final TextEditingController _projectController;
+  late final TextEditingController _locationController;
+  late final TextEditingController _clusterController;
+  late final TextEditingController _accountController;
+  late String _locationType;
+
+  @override
+  void initState() {
+    super.initState();
+    _projectController = TextEditingController(text: widget.initial.projectId);
+    _locationController = TextEditingController(text: widget.initial.location);
+    _clusterController =
+        TextEditingController(text: widget.initial.clusterName);
+    _accountController = TextEditingController(text: widget.initial.account);
+    _locationType = widget.initial.locationType == 'region' ? 'region' : 'zone';
+  }
+
+  @override
+  void dispose() {
+    _projectController.dispose();
+    _locationController.dispose();
+    _clusterController.dispose();
+    _accountController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('GCP Credentials'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.contextName != null && widget.contextName!.isNotEmpty)
+                Text('Current context: ${widget.contextName}'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _projectController,
+                decoration: const InputDecoration(
+                  labelText: 'GCP Project ID *',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _locationController,
+                decoration: const InputDecoration(
+                  labelText: 'GKE Location *',
+                  hintText: 'region-or-zone',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Location Type *',
+                  border: OutlineInputBorder(),
+                ),
+                initialValue: _locationType,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'zone',
+                    child: Text('Zone'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'region',
+                    child: Text('Region'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _locationType = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _clusterController,
+                decoration: const InputDecoration(
+                  labelText: 'GKE Cluster Name *',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _accountController,
+                decoration: const InputDecoration(
+                  labelText: 'GCP Account (Optional)',
+                  hintText: 'you@example.com',
+                  border: OutlineInputBorder(),
+                  helperText:
+                      'When filled, gcloud auth login runs before updating kubeconfig.',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () {
+            Navigator.of(context).pop(
+              _GcpCredentialsInput(
+                projectId: _projectController.text.trim(),
+                location: _locationController.text.trim(),
+                locationType: _locationType,
+                clusterName: _clusterController.text.trim(),
+                account: _accountController.text.trim(),
+              ),
+            );
+          },
+          icon: const Icon(Icons.login),
+          label: const Text('Login & Update'),
         ),
       ],
     );

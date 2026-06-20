@@ -56,6 +56,22 @@ void main() {
     expect(await storage.getAutoRefreshIntervalSeconds(), 30);
   });
 
+  test('saves and loads GCP settings', () async {
+    final storage = await LocalStorageClient.getInstance();
+
+    await storage.setGcpProjectId('team-project');
+    await storage.setGcpLocation('europe-west1');
+    await storage.setGcpLocationType('region');
+    await storage.setGcpClusterName('dev-cluster');
+    await storage.setGcpAccount('dev@example.com');
+
+    expect(await storage.getGcpProjectId(), 'team-project');
+    expect(await storage.getGcpLocation(), 'europe-west1');
+    expect(await storage.getGcpLocationType(), 'region');
+    expect(await storage.getGcpClusterName(), 'dev-cluster');
+    expect(await storage.getGcpAccount(), 'dev@example.com');
+  });
+
   test('saves and loads theme preference', () async {
     final storage = await LocalStorageClient.getInstance();
 
