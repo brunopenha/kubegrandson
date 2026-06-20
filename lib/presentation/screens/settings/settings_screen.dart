@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -10,7 +11,26 @@ import '../../providers/kubernetes_provider.dart';
 import '../../providers/settings_notifier.dart';
 import '../../providers/theme/app_colors.dart';
 import '../../providers/theme_provider.dart';
+import '../../shortcuts/log_navigation_shortcuts.dart';
 import '../../theme/app_text_styles.dart';
+
+enum _ShortcutAction {
+  lineUp('lineUp', 'Go line up'),
+  lineDown('lineDown', 'Go line down');
+
+  final String id;
+  final String label;
+
+  const _ShortcutAction(this.id, this.label);
+
+  static _ShortcutAction? fromId(String? id) {
+    for (final action in values) {
+      if (action.id == id) return action;
+    }
+
+    return null;
+  }
+}
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -28,7 +48,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final TextEditingController _awsSsoStartUrlController =
       TextEditingController();
   final TextEditingController _awsSsoRegionController = TextEditingController();
+  final FocusNode _shortcutCaptureFocusNode = FocusNode();
+  String? _capturingShortcutAction;
 
+  // ignore: unused_field
   bool _isAwsRefreshing = false;
 
   final Uri toLaunch = Uri(
@@ -52,6 +75,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _awsAccountIdController.dispose();
     _awsSsoStartUrlController.dispose();
     _awsSsoRegionController.dispose();
+    _shortcutCaptureFocusNode.dispose();
     super.dispose();
   }
 
@@ -152,6 +176,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  // ignore: unused_element
   Future<void> _refreshAwsCredentials() async {
     final profile = _awsProfileController.text.trim();
     final region = _awsRegionController.text.trim();
@@ -515,6 +540,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   },
                 ),
               ),
+              const SizedBox(height: 16),
+              KeyboardListener(
+                focusNode: _shortcutCaptureFocusNode,
+                onKeyEvent: _handleShortcutCaptureKey,
+                child: _buildSetting(
+                  'Keyboard Shortcuts',
+                  Column(
+                    children: [
+                      _buildShortcutCaptureRow(
+                        label: 'Go line up',
+                        action: _ShortcutAction.lineUp,
+                        shortcut: settings.logNavigationUpShortcut,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildShortcutCaptureRow(
+                        label: 'Go line down',
+                        action: _ShortcutAction.lineDown,
+                        shortcut: settings.logNavigationDownShortcut,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -594,6 +642,116 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child,
       ],
     );
+  }
+
+  Widget _buildShortcutCaptureRow({
+    required String label,
+    required _ShortcutAction action,
+    required String shortcut,
+  }) {
+    final isCapturing = _capturingShortcutAction == action.id;
+    final buttonText = isCapturing ? 'Press a key...' : shortcutLabel(shortcut);
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 130,
+          child: Text(
+            '$label:',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton(
+              onPressed: () => _startShortcutCapture(action),
+              child: Text(buttonText),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _startShortcutCapture(_ShortcutAction action) {
+    setState(() {
+      _capturingShortcutAction = action.id;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _shortcutCaptureFocusNode.requestFocus();
+    });
+  }
+
+  void _handleShortcutCaptureKey(KeyEvent event) {
+    final action = _ShortcutAction.fromId(_capturingShortcutAction);
+    if (action == null || event is! KeyDownEvent) return;
+
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      setState(() {
+        _capturingShortcutAction = null;
+      });
+      return;
+    }
+
+    final shortcut = shortcutIdForKey(event.logicalKey);
+    final conflictLabel = _shortcutConflictLabel(action, shortcut);
+    if (conflictLabel != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${shortcutLabel(shortcut)} is already used by $conflictLabel.',
+          ),
+        ),
+      );
+      setState(() {
+        _capturingShortcutAction = null;
+      });
+      return;
+    }
+
+    _saveCapturedShortcut(action, shortcut);
+  }
+
+  String? _shortcutConflictLabel(_ShortcutAction action, String shortcut) {
+    final settings = ref.read(settingsProvider);
+    final capturedKey = keyForShortcut(shortcut);
+    if (capturedKey == null) return null;
+
+    final shortcuts = {
+      _ShortcutAction.lineUp: settings.logNavigationUpShortcut,
+      _ShortcutAction.lineDown: settings.logNavigationDownShortcut,
+    };
+
+    for (final entry in shortcuts.entries) {
+      if (entry.key == action) continue;
+      if (shortcutMatchesKey(entry.value, capturedKey)) {
+        return entry.key.label;
+      }
+    }
+
+    return null;
+  }
+
+  void _saveCapturedShortcut(_ShortcutAction action, String shortcut) {
+    final notifier = ref.read(settingsProvider.notifier);
+
+    switch (action) {
+      case _ShortcutAction.lineUp:
+        notifier.setLogNavigationUpShortcut(shortcut);
+        break;
+      case _ShortcutAction.lineDown:
+        notifier.setLogNavigationDownShortcut(shortcut);
+        break;
+    }
+
+    setState(() {
+      _capturingShortcutAction = null;
+    });
   }
 
   Color get _settingsControlForeground {

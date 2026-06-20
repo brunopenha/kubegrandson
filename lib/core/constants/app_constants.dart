@@ -5,7 +5,8 @@ class AppConstants {
 
   // Storage keys
   static const String kubeconfigPathKey = 'kubeconfig_path';
-  static const String kubeConfigPathKey = 'kubeconfig_path'; // Alias for consistency
+  static const String kubeConfigPathKey =
+      'kubeconfig_path'; // Alias for consistency
   static const String currentContextKey = 'current_context';
   static const String defaultNamespaceKey = 'default_namespace';
   static const String themeKey = 'theme_mode';
@@ -13,7 +14,11 @@ class AppConstants {
   static const String fontSizeKey = 'font_size';
   static const String maxLogLinesKey = 'max_log_lines';
   static const String autoScrollKey = 'auto_scroll';
-  static const String autoRefreshIntervalSecondsKey = 'auto_refresh_interval_seconds';
+  static const String logNavigationUpShortcutKey = 'log_navigation_up_shortcut';
+  static const String logNavigationDownShortcutKey =
+      'log_navigation_down_shortcut';
+  static const String autoRefreshIntervalSecondsKey =
+      'auto_refresh_interval_seconds';
   static const String awsProfileKey = 'aws_profile';
   static const String awsRegionKey = 'aws_region';
   static const String awsClusterNameKey = 'aws_cluster_name';
@@ -25,6 +30,8 @@ class AppConstants {
   static const int defaultMaxLogLines = 1000;
   static const double defaultFontSize = 14.0;
   static const bool defaultAutoScroll = true;
+  static const String defaultLogNavigationUpShortcut = 'arrowUp';
+  static const String defaultLogNavigationDownShortcut = 'arrowDown';
   static const String defaultNamespace = 'default';
   static const int defaultAutoRefreshIntervalSeconds = 10;
 

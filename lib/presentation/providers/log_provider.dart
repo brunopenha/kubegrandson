@@ -359,6 +359,21 @@ class LogNotifier extends StateNotifier<LogState> {
     state = state.copyWith(selectedLogEntry: logEntry);
   }
 
+  void selectAdjacentLog(int direction) {
+    if (direction == 0) return;
+
+    final logs = filteredLogs;
+    if (logs.isEmpty) return;
+
+    final selected = state.selectedLogEntry;
+    final currentIndex = selected == null ? -1 : logs.indexOf(selected);
+    final nextIndex = currentIndex < 0
+        ? (direction > 0 ? 0 : logs.length - 1)
+        : (currentIndex + direction).clamp(0, logs.length - 1);
+
+    state = state.copyWith(selectedLogEntry: logs[nextIndex]);
+  }
+
   void setTraceFilter(bool enabled) {
     state = state.copyWith(traceOnly: enabled);
   }

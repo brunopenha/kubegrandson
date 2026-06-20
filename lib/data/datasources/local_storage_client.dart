@@ -171,6 +171,69 @@ class LocalStorageClient {
     }
   }
 
+  // Log Navigation Shortcuts
+  Future<String> getLogNavigationUpShortcut() async {
+    try {
+      return _prefs?.getString(AppConstants.logNavigationUpShortcutKey) ??
+          AppConstants.defaultLogNavigationUpShortcut;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Failed to get log navigation up shortcut',
+        e,
+        stackTrace,
+      );
+      return AppConstants.defaultLogNavigationUpShortcut;
+    }
+  }
+
+  Future<bool> setLogNavigationUpShortcut(String shortcut) async {
+    try {
+      return await _prefs?.setString(
+            AppConstants.logNavigationUpShortcutKey,
+            shortcut,
+          ) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Failed to set log navigation up shortcut',
+        e,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
+  Future<String> getLogNavigationDownShortcut() async {
+    try {
+      return _prefs?.getString(AppConstants.logNavigationDownShortcutKey) ??
+          AppConstants.defaultLogNavigationDownShortcut;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Failed to get log navigation down shortcut',
+        e,
+        stackTrace,
+      );
+      return AppConstants.defaultLogNavigationDownShortcut;
+    }
+  }
+
+  Future<bool> setLogNavigationDownShortcut(String shortcut) async {
+    try {
+      return await _prefs?.setString(
+            AppConstants.logNavigationDownShortcutKey,
+            shortcut,
+          ) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Failed to set log navigation down shortcut',
+        e,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
   // Auto Refresh Interval Seconds
   Future<int> getAutoRefreshIntervalSeconds() async {
     try {

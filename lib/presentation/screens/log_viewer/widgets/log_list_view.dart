@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +5,7 @@ import 'package:kubegrandson/presentation/providers/settings_notifier.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../../providers/log_provider.dart';
+import 'log_syntax_highlighter.dart';
 
 class LogListView extends ConsumerStatefulWidget {
   final String podKey;
@@ -139,22 +138,6 @@ class _LogListViewState extends ConsumerState<LogListView> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                if (log.source != null) ...[
-                  SizedBox(
-                    width: 180,
-                    child: Text(
-                      log.source!,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: const Color(0xff7aa2f7),
-                        fontSize: settings.logFontSize,
-                        height: 1,
-                        fontFamily: 'RobotoMono',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                ],
                 Expanded(
                   child: SelectableText.rich(
                     _highlightedLogLine(
@@ -173,19 +156,11 @@ class _LogListViewState extends ConsumerState<LogListView> {
     );
   }
 
-  String _formatLogLine(LogEntry log, bool showTimestamp) {
-    final message = log.metadata != null ? jsonEncode(log.metadata) : log.text;
-    if (!showTimestamp) return message;
-
-    return '${log.timestamp.toIso8601String()} $message';
-  }
-
   TextSpan _highlightedLogLine(
     LogEntry log,
     bool showTimestamp,
     String searchQuery,
   ) {
-    final text = _formatLogLine(log, showTimestamp);
     final baseStyle = TextStyle(
       color: _getLogColor(log.text),
       fontSize: ref.watch(settingsProvider).logFontSize,
@@ -193,41 +168,12 @@ class _LogListViewState extends ConsumerState<LogListView> {
       fontFamily: 'RobotoMono',
     );
 
-    if (searchQuery.isEmpty) {
-      return TextSpan(text: text, style: baseStyle);
-    }
-
-    final lowerText = text.toLowerCase();
-    final lowerQuery = searchQuery.toLowerCase();
-    final spans = <TextSpan>[];
-    var start = 0;
-
-    while (true) {
-      final index = lowerText.indexOf(lowerQuery, start);
-      if (index < 0) {
-        spans.add(TextSpan(text: text.substring(start)));
-        break;
-      }
-
-      if (index > start) {
-        spans.add(TextSpan(text: text.substring(start, index)));
-      }
-
-      final end = index + searchQuery.length;
-      spans.add(
-        TextSpan(
-          text: text.substring(index, end),
-          style: baseStyle.copyWith(
-            color: Colors.black,
-            backgroundColor: const Color(0xffffd84a),
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
-      start = end;
-    }
-
-    return TextSpan(style: baseStyle, children: spans);
+    return buildHighlightedLogLine(
+      log: log,
+      showTimestamp: showTimestamp,
+      searchQuery: searchQuery,
+      baseStyle: baseStyle,
+    );
   }
 
   Color _getLogColor(String logText) {

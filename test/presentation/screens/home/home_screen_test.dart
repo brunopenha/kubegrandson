@@ -42,4 +42,14 @@ void main() {
     expect(groups.single.title, 'api');
     expect(groups.single.pods, hasLength(2));
   });
+
+  test('logViewerTitleForPods uses grouped labels for multiple pods', () {
+    final title = logViewerTitleForPods([
+      _pod(name: 'api-abc-123', labels: {'app': 'api'}),
+      _pod(name: 'api-def-456', labels: {'app': 'api'}),
+      _pod(name: 'worker-abc-123', labels: {'app': 'worker'}),
+    ]);
+
+    expect(title, 'api, worker');
+  });
 }

@@ -34,6 +34,26 @@ void main() {
     expect(await storage.getAutoScroll(), isFalse);
   });
 
+  test('updates and persists log navigation shortcuts', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await container
+        .read(settingsProvider.notifier)
+        .setLogNavigationUpShortcut('keyW');
+    await container
+        .read(settingsProvider.notifier)
+        .setLogNavigationDownShortcut('keyS');
+
+    final settings = container.read(settingsProvider);
+    expect(settings.logNavigationUpShortcut, 'keyW');
+    expect(settings.logNavigationDownShortcut, 'keyS');
+
+    final storage = await LocalStorageClient.getInstance();
+    expect(await storage.getLogNavigationUpShortcut(), 'keyW');
+    expect(await storage.getLogNavigationDownShortcut(), 'keyS');
+  });
+
   test('updates and persists max log lines', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);

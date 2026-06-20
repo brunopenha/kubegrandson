@@ -109,6 +109,27 @@ void main() {
     expect(notifier.state.selectedSearchMatchIndex, -1);
   });
 
+  test('selectAdjacentLog moves selection through filtered logs', () {
+    notifier.replaceLogs([
+      _entry('alpha one', 1),
+      _entry('beta', 2),
+      _entry('alpha two', 3),
+    ]);
+    notifier.setSearchQuery('alpha');
+
+    notifier.selectAdjacentLog(1);
+    expect(notifier.state.selectedLogEntry?.lineNumber, 1);
+
+    notifier.selectAdjacentLog(1);
+    expect(notifier.state.selectedLogEntry?.lineNumber, 3);
+
+    notifier.selectAdjacentLog(1);
+    expect(notifier.state.selectedLogEntry?.lineNumber, 3);
+
+    notifier.selectAdjacentLog(-1);
+    expect(notifier.state.selectedLogEntry?.lineNumber, 1);
+  });
+
   test('addMarker appends a plain marker log entry and selects it', () {
     notifier.replaceLogs([
       _entry('before marker', 1),

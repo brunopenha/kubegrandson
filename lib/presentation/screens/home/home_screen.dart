@@ -261,9 +261,11 @@ class HomeScreen extends ConsumerWidget {
                                       .map((pod) => pod.name)
                                       .map(Uri.encodeComponent)
                                       .join(',');
+                                  final title =
+                                      logViewerTitleForPods(selectedPods);
 
                                   context.go(
-                                    '/logs/$namespace/${selectedPods.first.name}?pods=$query',
+                                    '/logs/$namespace/${Uri.encodeComponent(title)}?pods=$query',
                                   );
                                 },
                               ),
@@ -446,6 +448,13 @@ class HomeScreen extends ConsumerWidget {
       '?importPath=${Uri.encodeComponent(path)}',
     );
   }
+}
+
+@visibleForTesting
+String logViewerTitleForPods(List<KubePod> pods) {
+  if (pods.length == 1) return pods.single.name;
+
+  return groupPodsByLabel(pods).map((group) => group.title).join(', ');
 }
 
 Future<void> _promptAwsSsoRefresh(BuildContext context, WidgetRef ref) async {

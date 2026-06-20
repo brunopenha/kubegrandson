@@ -18,6 +18,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
             logFontSize: AppConstants.defaultFontSize,
             maxLogLines: AppConstants.defaultMaxLogLines,
             autoScroll: AppConstants.defaultAutoScroll,
+            logNavigationUpShortcut:
+                AppConstants.defaultLogNavigationUpShortcut,
+            logNavigationDownShortcut:
+                AppConstants.defaultLogNavigationDownShortcut,
             defaultNamespace: AppConstants.defaultNamespace,
             autoRefreshIntervalSeconds:
                 AppConstants.defaultAutoRefreshIntervalSeconds,
@@ -33,6 +37,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       logFontSize: await storage.getFontSize(),
       maxLogLines: await storage.getMaxLogLines(),
       autoScroll: await storage.getAutoScroll(),
+      logNavigationUpShortcut: await storage.getLogNavigationUpShortcut(),
+      logNavigationDownShortcut: await storage.getLogNavigationDownShortcut(),
       defaultNamespace:
           await storage.getDefaultNamespace() ?? AppConstants.defaultNamespace,
       autoRefreshIntervalSeconds: await storage.getAutoRefreshIntervalSeconds(),
@@ -62,6 +68,20 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     state = state.copyWith(autoScroll: enabled);
     final storage = await LocalStorageClient.getInstance();
     await storage.setAutoScroll(enabled);
+  }
+
+  Future<void> setLogNavigationUpShortcut(String shortcut) async {
+    _hasLocalChanges = true;
+    state = state.copyWith(logNavigationUpShortcut: shortcut);
+    final storage = await LocalStorageClient.getInstance();
+    await storage.setLogNavigationUpShortcut(shortcut);
+  }
+
+  Future<void> setLogNavigationDownShortcut(String shortcut) async {
+    _hasLocalChanges = true;
+    state = state.copyWith(logNavigationDownShortcut: shortcut);
+    final storage = await LocalStorageClient.getInstance();
+    await storage.setLogNavigationDownShortcut(shortcut);
   }
 
   Future<void> setDefaultNamespace(String namespaceName) async {

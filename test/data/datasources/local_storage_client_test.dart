@@ -15,6 +15,14 @@ void main() {
     expect(await storage.getFontSize(), AppConstants.defaultFontSize);
     expect(await storage.getMaxLogLines(), AppConstants.defaultMaxLogLines);
     expect(await storage.getAutoScroll(), AppConstants.defaultAutoScroll);
+    expect(
+      await storage.getLogNavigationUpShortcut(),
+      AppConstants.defaultLogNavigationUpShortcut,
+    );
+    expect(
+      await storage.getLogNavigationDownShortcut(),
+      AppConstants.defaultLogNavigationDownShortcut,
+    );
     expect(await storage.getDefaultNamespace(), AppConstants.defaultNamespace);
     expect(
       await storage.getAutoRefreshIntervalSeconds(),
@@ -28,10 +36,14 @@ void main() {
     await storage.setFontSize(18);
     await storage.setMaxLogLines(5000);
     await storage.setAutoScroll(false);
+    await storage.setLogNavigationUpShortcut('keyW');
+    await storage.setLogNavigationDownShortcut('keyS');
 
     expect(await storage.getFontSize(), 18);
     expect(await storage.getMaxLogLines(), 5000);
     expect(await storage.getAutoScroll(), isFalse);
+    expect(await storage.getLogNavigationUpShortcut(), 'keyW');
+    expect(await storage.getLogNavigationDownShortcut(), 'keyS');
   });
 
   test('saves and loads kubernetes settings', () async {
