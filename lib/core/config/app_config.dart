@@ -59,7 +59,7 @@ class AppConfig {
     return _appVersion!;
   }
 
-  static const String appVersionFallback = '0.0.1';
+  static const String appVersionFallback = '0.7.1';
   static const String appName = 'Kubegrandson';
   static const String vendor = 'Bruno Penha';
   static const String description =
