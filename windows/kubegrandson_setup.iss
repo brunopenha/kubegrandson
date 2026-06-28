@@ -48,8 +48,8 @@ UninstallDisplayName={#MyAppName}
 
 ; Output
 OutputDir=..\build\windows\installer
-; kubegrandson_installer_0.0.7_amd64_windows.exe
-OutputBaseFilename=kubegrandson_installer_{#MyAppVersion}_amd64_windows
+; kubegrandson_v0.7.1_amd64_windows.exe
+OutputBaseFilename=kubegrandson_v{#MyAppVersion}_amd64_windows
 
 ; Compression
 Compression=lzma2/ultra64
