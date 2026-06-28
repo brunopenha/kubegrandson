@@ -451,9 +451,8 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
         );
       }
 
-      return buildHighlightedLogLine(
-        log: log,
-        showTimestamp: false,
+      return buildHighlightedShellText(
+        shellText: log.text,
         searchQuery: searchQuery,
         baseStyle: baseStyle,
       );

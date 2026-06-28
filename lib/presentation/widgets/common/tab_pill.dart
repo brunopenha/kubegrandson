@@ -16,6 +16,7 @@ class TabPill<T extends TabPillButtonConfig> extends StatefulWidget {
   final double minButtonWidth;
   final Function(T key, bool selected)? onButtonToggled;
   final Map<T, TabPill>? popups;
+  final Set<T>? selectedButtons;
 
   const TabPill({
     super.key,
@@ -24,6 +25,7 @@ class TabPill<T extends TabPillButtonConfig> extends StatefulWidget {
     this.minButtonWidth = 70,
     this.onButtonToggled,
     this.popups,
+    this.selectedButtons,
   });
 
   @override
@@ -43,6 +45,15 @@ class _TabPillState<T extends TabPillButtonConfig> extends State<TabPill<T>> {
   }
 
   void _handleButtonPressed(T button) {
+    final controlledSelection = widget.selectedButtons;
+    if (controlledSelection != null) {
+      widget.onButtonToggled?.call(
+        button,
+        !controlledSelection.contains(button),
+      );
+      return;
+    }
+
     setState(() {
       _buttonStates[button] = !_buttonStates[button]!;
     });
@@ -103,7 +114,9 @@ class _TabPillState<T extends TabPillButtonConfig> extends State<TabPill<T>> {
     final GlobalKey buttonKey = GlobalKey();
     final isFirst = index == 0;
     final isLast = index == widget.buttons.length - 1;
-    final isSelected = _buttonStates[button] ?? false;
+    final isSelected = widget.selectedButtons?.contains(button) ??
+        _buttonStates[button] ??
+        false;
     final hasPopup = widget.popups?.containsKey(button) ?? false;
     const selectedBackground = Color(0xFF5A8FD8);
     const selectedBorder = Color(0xFF8CB6EA);

@@ -30,19 +30,13 @@ void main() {
   }
 
   test('colors JSON keys and value types independently', () {
-    final span = buildHighlightedLogLine(
-      log: LogEntry(
-        text: 'started',
-        timestamp: DateTime(2026),
-        lineNumber: 1,
-        metadata: const {
-          'level': 'info',
-          'status': 200,
-          'ok': true,
-          'missing': null,
-        },
-      ),
-      showTimestamp: false,
+    final span = buildHighlightedJsonText(
+      jsonText: jsonEncode({
+        'level': 'info',
+        'status': 200,
+        'ok': true,
+        'missing': null,
+      }),
       searchQuery: '',
       baseStyle: baseStyle,
     );
@@ -96,5 +90,24 @@ void main() {
     expect(token('"level"').style?.color, jsonLogKeyColor);
     expect(token('"warn"').style?.color, jsonLogStringColor);
     expect(token('3').style?.color, jsonLogNumberColor);
+  });
+
+  test('colors shell details', () {
+    final span = buildHighlightedShellText(
+      shellText: '[2026-06-28] ERROR exec -a "java" /usr/bin/java -Xmx256m',
+      searchQuery: '',
+      baseStyle: baseStyle,
+    );
+
+    final spans = flatten(span);
+    TextSpan token(String text) =>
+        spans.singleWhere((span) => span.text == text);
+
+    expect(token('[2026-06-28]').style?.color, shellTimestampColor);
+    expect(token('ERROR').style?.color, logErrorColor);
+    expect(token('exec').style?.color, shellCommandColor);
+    expect(token('-a').style?.color, shellOptionColor);
+    expect(token('"java"').style?.color, shellStringColor);
+    expect(token('/usr/bin/java').style?.color, shellPathColor);
   });
 }

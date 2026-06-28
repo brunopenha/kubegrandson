@@ -162,7 +162,7 @@ class _LogListViewState extends ConsumerState<LogListView> {
     String searchQuery,
   ) {
     final baseStyle = TextStyle(
-      color: _getLogColor(log.text),
+      color: logLevelColor(logLevelForDisplay(log)),
       fontSize: ref.watch(settingsProvider).logFontSize,
       height: 1,
       fontFamily: 'RobotoMono',
@@ -174,23 +174,6 @@ class _LogListViewState extends ConsumerState<LogListView> {
       searchQuery: searchQuery,
       baseStyle: baseStyle,
     );
-  }
-
-  Color _getLogColor(String logText) {
-    final lowerText = logText.toLowerCase();
-    if (lowerText.contains('error') || lowerText.contains('fatal')) {
-      return const Color(0xffff5f56);
-    } else if (lowerText.contains('warn')) {
-      return const Color(0xffffd84a);
-    } else if (lowerText.contains('info') || lowerText.contains('note')) {
-      return const Color(0xffd7d7d7);
-    } else if (lowerText.contains('debug')) {
-      return const Color(0xff8ab4f8);
-    } else if (lowerText.contains('manual-log-marker') ||
-        lowerText.contains('"level":"marker"')) {
-      return const Color(0xff7aa2f7);
-    }
-    return const Color(0xffbdbdbd);
   }
 
   void _showContextMenu(BuildContext context, String text) {

@@ -398,6 +398,17 @@ class LogNotifier extends StateNotifier<LogState> {
     state = state.copyWith(fatalOnly: enabled);
   }
 
+  void clearLevelFilters() {
+    state = state.copyWith(
+      traceOnly: false,
+      debugOnly: false,
+      infoOnly: false,
+      warnOnly: false,
+      errorOnly: false,
+      fatalOnly: false,
+    );
+  }
+
   void setShowTimestamps(bool enabled) {
     state = state.copyWith(showTimestamps: enabled);
   }
@@ -444,6 +455,10 @@ class LogNotifier extends StateNotifier<LogState> {
 
 String? _levelForFiltering(LogEntry log) {
   return _normalizeLogLevel(log.level) ?? _inferLogLevel(log.text);
+}
+
+String? logLevelForDisplay(LogEntry log) {
+  return _levelForFiltering(log);
 }
 
 String? _inferLogLevel(String text) {

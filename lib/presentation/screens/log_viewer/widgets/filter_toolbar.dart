@@ -42,6 +42,7 @@ class LogFilterToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final logState = ref.watch(logProvider(podKey));
     final logNotifier = ref.read(logProvider(podKey).notifier);
+    final selectedFilters = _selectedFilters(logState);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -60,6 +61,7 @@ class LogFilterToolbar extends ConsumerWidget {
           const SizedBox(width: 12),
           TabPill<LogLevelFilter>(
             buttons: LogLevelFilter.values,
+            selectedButtons: selectedFilters,
             orientation: TabPillOrientation.horizontal,
             minButtonWidth: 50,
             onButtonToggled: (key, selected) {
@@ -83,12 +85,7 @@ class LogFilterToolbar extends ConsumerWidget {
                   logNotifier.setInfoFilter(selected);
                   break;
                 case LogLevelFilter.all:
-                  logNotifier.setInfoFilter(selected);
-                  logNotifier.setWarnFilter(selected);
-                  logNotifier.setErrorFilter(selected);
-                  logNotifier.setFatalFilter(selected);
-                  logNotifier.setTraceFilter(selected);
-                  logNotifier.setDebugFilter(selected);
+                  logNotifier.clearLevelFilters();
                   break;
               }
             },
@@ -107,5 +104,18 @@ class LogFilterToolbar extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Set<LogLevelFilter> _selectedFilters(LogState logState) {
+    final selected = <LogLevelFilter>{};
+    if (logState.traceOnly) selected.add(LogLevelFilter.trace);
+    if (logState.debugOnly) selected.add(LogLevelFilter.debug);
+    if (logState.infoOnly) selected.add(LogLevelFilter.info);
+    if (logState.warnOnly) selected.add(LogLevelFilter.warning);
+    if (logState.errorOnly) selected.add(LogLevelFilter.error);
+    if (logState.fatalOnly) selected.add(LogLevelFilter.fatal);
+
+    if (selected.isEmpty) return {LogLevelFilter.all};
+    return selected;
   }
 }

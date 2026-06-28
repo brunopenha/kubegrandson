@@ -165,6 +165,9 @@ void main() {
     notifier.setWarnFilter(false);
     notifier.setErrorFilter(true);
     expect(notifier.filteredLogs.map((log) => log.lineNumber), [4]);
+
+    notifier.clearLevelFilters();
+    expect(notifier.filteredLogs.map((log) => log.lineNumber), [1, 2, 3, 4]);
   });
 
   test('log level filters match JSON logs', () {
