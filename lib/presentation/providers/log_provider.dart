@@ -1,9 +1,10 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rxdart/rxdart.dart';
+
 import '../../domain/services/kubernetes_service.dart';
 import 'kubernetes_provider.dart';
 import 'settings_notifier.dart';
@@ -465,30 +466,7 @@ class LogNotifier extends StateNotifier<LogState> {
     _logsController.add(currentLogs);
   }
 
-  List<LogEntry> get filteredLogs {
-    var logs = state.logs;
-
-    final selectedLevels = <String>[];
-    if (state.traceOnly) selectedLevels.add('trace');
-    if (state.debugOnly) selectedLevels.add('debug');
-    if (state.infoOnly) selectedLevels.add('info');
-    if (state.warnOnly) selectedLevels.add('warn');
-    if (state.errorOnly) selectedLevels.add('error');
-    if (state.fatalOnly) selectedLevels.add('fatal');
-
-    if (selectedLevels.isNotEmpty) {
-      logs = logs.where((log) {
-        return selectedLevels.contains(_levelForFiltering(log));
-      }).toList();
-    }
-
-    if (state.searchQuery.isEmpty) return logs;
-
-    return logs
-        .where((log) =>
-            log.text.toLowerCase().contains(state.searchQuery.toLowerCase()))
-        .toList();
-  }
+  List<LogEntry> get filteredLogs => filteredLogsForState(state);
 
   List<LogEntry> get searchMatches {
     if (state.searchQuery.isEmpty) return const [];
@@ -688,6 +666,32 @@ final logProvider = StateNotifierProvider.family<LogNotifier, LogState, String>(
     );
   },
 );
+
+List<LogEntry> filteredLogsForState(LogState state) {
+  var logs = state.logs;
+
+  final selectedLevels = <String>[];
+  if (state.traceOnly) selectedLevels.add('trace');
+  if (state.debugOnly) selectedLevels.add('debug');
+  if (state.infoOnly) selectedLevels.add('info');
+  if (state.warnOnly) selectedLevels.add('warn');
+  if (state.errorOnly) selectedLevels.add('error');
+  if (state.fatalOnly) selectedLevels.add('fatal');
+
+  if (selectedLevels.isNotEmpty) {
+    logs = logs.where((log) {
+      return selectedLevels.contains(_levelForFiltering(log));
+    }).toList();
+  }
+
+  if (state.searchQuery.isEmpty) return logs;
+
+  return logs
+      .where((log) =>
+          log.text.toLowerCase().contains(state.searchQuery.toLowerCase()))
+      .toList();
+}
+
 String prettyJson(String line) {
   try {
     final jsonObj = jsonDecode(line);

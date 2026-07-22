@@ -46,6 +46,68 @@ class _LogListViewState extends ConsumerState<LogListView> {
     });
   }
 
+  List<ItemPosition> get _visiblePositions =>
+      widget.positionsListener.itemPositions.value.toList();
+
+  bool _isIndexVisible(int index) {
+    return _visiblePositions.any(
+      (position) =>
+          position.index == index &&
+          position.itemLeadingEdge >= 0 &&
+          position.itemTrailingEdge <= 1,
+    );
+  }
+
+  bool _wasAtBottom(int lastIndex) {
+    if (lastIndex < 0) return true;
+
+    final positions = _visiblePositions;
+    if (positions.isEmpty) return true;
+
+    return positions.any(
+      (position) =>
+          position.index == lastIndex &&
+          position.itemLeadingEdge < 1 &&
+          position.itemTrailingEdge <= 1.05,
+    );
+  }
+
+  void _scrollSelectedIntoView(int index) {
+    if (index < 0 || _isIndexVisible(index)) return;
+
+    final positions = _visiblePositions;
+    if (positions.isEmpty) {
+      _scheduleJumpTo(index, alignment: 0.9);
+      return;
+    }
+
+    ItemPosition? selectedPosition;
+    for (final position in positions) {
+      if (position.index == index) {
+        selectedPosition = position;
+        break;
+      }
+    }
+    if (selectedPosition != null) {
+      if (selectedPosition.itemLeadingEdge < 0) {
+        _scheduleJumpTo(index, alignment: 0);
+      } else if (selectedPosition.itemTrailingEdge > 1) {
+        _scheduleJumpTo(index, alignment: 0.9);
+      }
+      return;
+    }
+
+    final indexes = positions.map((position) => position.index);
+    final firstVisibleIndex = indexes.reduce((a, b) => a < b ? a : b);
+    final lastVisibleIndex = indexes.reduce((a, b) => a > b ? a : b);
+
+    if (index < firstVisibleIndex) {
+      _scheduleJumpTo(index, alignment: 0);
+    } else if (index > lastVisibleIndex) {
+      _scheduleJumpTo(index, alignment: 0.9);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final logNotifier = ref.read(logProvider(widget.podKey).notifier);
@@ -60,13 +122,15 @@ class _LogListViewState extends ConsumerState<LogListView> {
             .read(logProvider(widget.podKey).notifier)
             .filteredLogs
             .indexOf(selected);
-        _scheduleJumpTo(index, alignment: 0.5);
+        _scrollSelectedIntoView(index);
         return;
       }
 
       final resumed = previous?.autoScroll == false && next.autoScroll;
       final receivedLogs = !identical(previous?.logs, next.logs);
-      if (next.autoScroll && (resumed || receivedLogs)) {
+      final wasAtBottom = previous == null ||
+          _wasAtBottom(filteredLogsForState(previous).length - 1);
+      if (next.autoScroll && (resumed || (receivedLogs && wasAtBottom))) {
         final lastIndex =
             ref.read(logProvider(widget.podKey).notifier).filteredLogs.length -
                 1;
