@@ -47,6 +47,36 @@ final selectedNamespaceProvider = StateProvider<String>((ref) {
 });
 
 final selectedPodNamesProvider = StateProvider<Set<String>>((ref) => {});
+final podLogSearchQueryProvider = StateProvider<String>((ref) => '');
+final podLogSearchMatchesProvider = StateProvider<Set<String>?>((ref) => null);
+final isSearchingPodLogsProvider = StateProvider<bool>((ref) => false);
+
+Set<String> reconcilePodSelection(
+  Set<String> selectedPodNames,
+  Iterable<KubePod> pods,
+) {
+  final existingPodNames = pods.map((pod) => pod.name).toSet();
+  return selectedPodNames.intersection(existingPodNames);
+}
+
+String podGroupName(KubePod pod) {
+  final labels = pod.labels ?? const <String, String>{};
+
+  return labels['app.kubernetes.io/name'] ??
+      labels['app'] ??
+      labels['k8s-app'] ??
+      labels['component'] ??
+      replicaSetPrefix(pod.name);
+}
+
+String replicaSetPrefix(String podName) {
+  final parts = podName.split('-');
+  if (parts.length >= 3) {
+    return parts.take(parts.length - 2).join('-');
+  }
+
+  return podName;
+}
 
 final autoRefreshIntervalSecondsProvider = StateProvider<int>((ref) {
   return ref.watch(
@@ -102,6 +132,53 @@ void refreshCurrentPods(WidgetRef ref) {
   refreshKubernetesResources(ref);
 }
 
+Future<void> searchLogsAcrossPods(WidgetRef ref) async {
+  final query = ref.read(podLogSearchQueryProvider).trim();
+  if (query.isEmpty) {
+    ref.read(podLogSearchMatchesProvider.notifier).state = null;
+    return;
+  }
+
+  ref.read(isSearchingPodLogsProvider.notifier).state = true;
+  try {
+    final pods = await ref.read(currentPodsProvider.future);
+    final service = ref.read(kubernetesServiceProvider);
+    final normalizedQuery = query.toLowerCase();
+    final results = await Future.wait(
+      pods.map((pod) async {
+        try {
+          final matches = await service
+              .streamLogs(
+                namespace: pod.namespace,
+                podName: pod.name,
+                tailLines: 1000,
+                follow: false,
+              )
+              .any((line) => line.toLowerCase().contains(normalizedQuery));
+          return matches ? pod.name : null;
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+
+    if (ref.read(podLogSearchQueryProvider).trim() == query) {
+      final matches = results.whereType<String>().toSet();
+      ref.read(podLogSearchMatchesProvider.notifier).state = matches;
+      final selected = ref.read(selectedPodNamesProvider);
+      ref.read(selectedPodNamesProvider.notifier).state =
+          selected.intersection(matches);
+    }
+  } finally {
+    ref.read(isSearchingPodLogsProvider.notifier).state = false;
+  }
+}
+
+void clearPodLogSearch(WidgetRef ref) {
+  ref.read(podLogSearchQueryProvider.notifier).state = '';
+  ref.read(podLogSearchMatchesProvider.notifier).state = null;
+}
+
 Future<void> switchKubernetesContext(
   WidgetRef ref, {
   required String contextName,
@@ -111,6 +188,7 @@ Future<void> switchKubernetesContext(
   await service.switchContext(contextName);
   ref.read(selectedNamespaceProvider.notifier).state = namespace ?? 'default';
   ref.read(selectedPodNamesProvider.notifier).state = {};
+  clearPodLogSearch(ref);
   refreshKubernetesResources(ref);
 }
 
@@ -189,6 +267,12 @@ final filteredPodsProvider = Provider<AsyncValue<List<KubePod>>>((ref) {
 
   return podsAsync.whenData((pods) {
     var filtered = pods;
+    final logSearchMatches = ref.watch(podLogSearchMatchesProvider);
+
+    if (logSearchMatches != null) {
+      filtered =
+          filtered.where((pod) => logSearchMatches.contains(pod.name)).toList();
+    }
 
     // Search filter
     if (filter.searchQuery.isNotEmpty) {

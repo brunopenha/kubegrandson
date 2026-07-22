@@ -23,8 +23,27 @@ class HomeScreen extends ConsumerWidget {
     final contextsAsync = ref.watch(contextsProvider);
     final namespacesAsync = ref.watch(namespacesProvider);
     final selectedNamespace = ref.watch(selectedNamespaceProvider);
-    final selectedPodNames = ref.watch(selectedPodNamesProvider);
+    final storedSelectedPodNames = ref.watch(selectedPodNamesProvider);
+    final currentPodsAsync = ref.watch(currentPodsProvider);
+    final selectedPodNames = currentPodsAsync.maybeWhen(
+      data: (pods) => reconcilePodSelection(storedSelectedPodNames, pods),
+      orElse: () => storedSelectedPodNames,
+    );
     final podsAsync = ref.watch(filteredPodsProvider);
+
+    if (selectedPodNames.length != storedSelectedPodNames.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final currentSelection = ref.read(selectedPodNamesProvider);
+        final reconciledSelection = currentPodsAsync.maybeWhen(
+          data: (pods) => reconcilePodSelection(currentSelection, pods),
+          orElse: () => currentSelection,
+        );
+        if (reconciledSelection.length != currentSelection.length) {
+          ref.read(selectedPodNamesProvider.notifier).state =
+              reconciledSelection;
+        }
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -178,6 +197,7 @@ class HomeScreen extends ConsumerWidget {
                               ref
                                   .read(selectedPodNamesProvider.notifier)
                                   .state = {};
+                              clearPodLogSearch(ref);
                             });
                           }
 
@@ -198,6 +218,7 @@ class HomeScreen extends ConsumerWidget {
                                 ref
                                     .read(selectedPodNamesProvider.notifier)
                                     .state = {};
+                                clearPodLogSearch(ref);
                               }
                             },
                           );
@@ -249,6 +270,16 @@ class HomeScreen extends ConsumerWidget {
                   }
 
                   final podGroups = groupPodsByLabel(pods);
+                  final visiblePodNames = pods.map((pod) => pod.name).toSet();
+                  final allVisibleSelected = visiblePodNames.isNotEmpty &&
+                      visiblePodNames.every(selectedPodNames.contains);
+                  final someVisibleSelected =
+                      visiblePodNames.any(selectedPodNames.contains);
+                  final logSearchQuery =
+                      ref.read(podLogSearchQueryProvider).trim();
+                  final searchSuffix = logSearchQuery.isEmpty
+                      ? ''
+                      : '&search=${Uri.encodeComponent(logSearchQuery)}';
 
                   return Column(
                     children: [
@@ -256,6 +287,25 @@ class HomeScreen extends ConsumerWidget {
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: Row(
                           children: [
+                            Checkbox(
+                              tristate: true,
+                              value: allVisibleSelected
+                                  ? true
+                                  : (someVisibleSelected ? null : false),
+                              onChanged: (checked) {
+                                final next = Set<String>.from(selectedPodNames);
+                                if (checked ?? false) {
+                                  next.addAll(visiblePodNames);
+                                } else {
+                                  next.removeAll(visiblePodNames);
+                                }
+                                ref
+                                    .read(selectedPodNamesProvider.notifier)
+                                    .state = next;
+                              },
+                            ),
+                            const Text('Select all'),
+                            const SizedBox(width: 16),
                             if (selectedPodNames.isNotEmpty)
                               Text(
                                   '${selectedPodNames.length} pod(s) selected'),
@@ -277,9 +327,14 @@ class HomeScreen extends ConsumerWidget {
                                       .join(',');
                                   final title =
                                       logViewerTitleForPods(selectedPods);
+                                  final groups = selectedPods
+                                      .map(podGroupName)
+                                      .toSet()
+                                      .map(Uri.encodeComponent)
+                                      .join(',');
 
                                   context.go(
-                                    '/logs/$namespace/${Uri.encodeComponent(title)}?pods=$query',
+                                    '/logs/$namespace/${Uri.encodeComponent(title)}?pods=$query&groups=$groups$searchSuffix',
                                   );
                                 },
                               ),
@@ -345,8 +400,10 @@ class HomeScreen extends ConsumerWidget {
                                             .map((pod) => pod.name)
                                             .map(Uri.encodeComponent)
                                             .join(',');
+                                        final groupQuery =
+                                            Uri.encodeComponent(group.title);
                                         context.go(
-                                          '/logs/${group.namespace}/${Uri.encodeComponent(group.title)}?pods=$query',
+                                          '/logs/${group.namespace}/${Uri.encodeComponent(group.title)}?pods=$query&groups=$groupQuery$searchSuffix',
                                         );
                                       },
                                       tooltip: 'View Logs',
@@ -1063,7 +1120,7 @@ List<PodGroup> groupPodsByLabel(List<KubePod> pods) {
   final groups = <String, List<KubePod>>{};
 
   for (final pod in pods) {
-    final groupName = _podGroupName(pod);
+    final groupName = podGroupName(pod);
     final key = '${pod.namespace}/$groupName';
     groups.putIfAbsent(key, () => []).add(pod);
   }
@@ -1074,7 +1131,7 @@ List<PodGroup> groupPodsByLabel(List<KubePod> pods) {
     final first = groupPods.first;
 
     return PodGroup(
-      title: _podGroupName(first),
+      title: podGroupName(first),
       namespace: first.namespace,
       phase: _groupPhase(groupPods),
       pods: groupPods,
@@ -1083,25 +1140,6 @@ List<PodGroup> groupPodsByLabel(List<KubePod> pods) {
     ..sort((a, b) => a.title.compareTo(b.title));
 
   return podGroups;
-}
-
-String _podGroupName(KubePod pod) {
-  final labels = pod.labels ?? const <String, String>{};
-
-  return labels['app.kubernetes.io/name'] ??
-      labels['app'] ??
-      labels['k8s-app'] ??
-      labels['component'] ??
-      _replicaSetPrefix(pod.name);
-}
-
-String _replicaSetPrefix(String podName) {
-  final parts = podName.split('-');
-  if (parts.length >= 3) {
-    return parts.take(parts.length - 2).join('-');
-  }
-
-  return podName;
 }
 
 String _groupPhase(List<KubePod> pods) {

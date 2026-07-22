@@ -15,10 +15,12 @@ LogEntry _entry(String text, int lineNumber) {
 
 void main() {
   late LogNotifier notifier;
+  late MockKubernetesService service;
 
   setUp(() {
+    service = MockKubernetesService();
     notifier = LogNotifier(
-      MockKubernetesService(),
+      service,
       defaultAutoScroll: true,
       maxLogLines: 1000,
     );
@@ -145,6 +147,66 @@ void main() {
     expect(marker.text, isNot(contains('manual-log-marker')));
     expect(marker.metadata, isNull);
     expect(notifier.state.selectedLogEntry, marker);
+  });
+
+  test('addPodStoppedMarker appends an English pod stop marker', () {
+    notifier.replaceLogs([_entry('last pod log', 1)]);
+
+    notifier.addPodStoppedMarker('demo-api-abc-123');
+
+    final marker = notifier.state.logs.last;
+    expect(
+      marker.text,
+      '-------- pod "demo-api-abc-123" stopped --------',
+    );
+    expect(marker.source, 'marker');
+    expect(marker.level, 'marker');
+  });
+
+  test('addPodStartingMarker appends an English pod start marker', () {
+    notifier.replaceLogs([_entry('previous pod log', 1)]);
+
+    notifier.addPodStartingMarker('demo-quarkus-k8s-97c6548f7-7pd7k');
+
+    final marker = notifier.state.logs.last;
+    expect(
+      marker.text,
+      '---- Pod starting demo-quarkus-k8s-97c6548f7-7pd7k ----',
+    );
+    expect(marker.source, 'marker');
+    expect(marker.level, 'marker');
+  });
+
+  test('setShowPodNames toggles pod name visibility', () {
+    expect(notifier.state.showPodNames, isFalse);
+
+    notifier.setShowPodNames(true);
+
+    expect(notifier.state.showPodNames, isTrue);
+  });
+
+  test('batches streamed log lines before updating state', () async {
+    when(
+      () => service.streamLogs(
+        namespace: any(named: 'namespace'),
+        podName: any(named: 'podName'),
+        containerName: any(named: 'containerName'),
+        tailLines: any(named: 'tailLines'),
+        follow: any(named: 'follow'),
+      ),
+    ).thenAnswer((_) => Stream.fromIterable(['first', 'second', 'third']));
+
+    await notifier.startStreamingForPods(
+      namespace: 'default',
+      podNames: ['api-123'],
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    expect(notifier.state.logs.map((log) => log.text), [
+      'first',
+      'second',
+      'third',
+    ]);
   });
 
   test('log level filters match plain text logs', () {

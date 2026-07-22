@@ -520,6 +520,11 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
       for (final pod in relatedPods) {
         await service.deletePod(pod.namespace, pod.name);
       }
+      final restartedPodNames = relatedPods.map((pod) => pod.name).toSet();
+      final selectedPodNames =
+          Set<String>.from(ref.read(selectedPodNamesProvider))
+            ..removeAll(restartedPodNames);
+      ref.read(selectedPodNamesProvider.notifier).state = selectedPodNames;
       ref.invalidate(podsProvider(widget.namespace));
       ref.invalidate(currentPodsProvider);
 

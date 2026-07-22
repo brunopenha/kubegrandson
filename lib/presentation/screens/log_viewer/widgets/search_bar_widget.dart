@@ -19,6 +19,12 @@ class LogSearchBar extends ConsumerStatefulWidget {
 class _LogSearchBarState extends ConsumerState<LogSearchBar> {
   final TextEditingController _controller = TextEditingController();
 
+  @override
+  void initState() {
+    super.initState();
+    _controller.text = ref.read(logProvider(widget.podKey)).searchQuery;
+  }
+
   void _clearSearch() {
     _controller.clear();
     ref.read(logProvider(widget.podKey).notifier).setSearchQuery('');
@@ -39,6 +45,12 @@ class _LogSearchBarState extends ConsumerState<LogSearchBar> {
     final hitCount = logNotifier.searchHitCount;
     final selectedMatchNumber = logNotifier.selectedSearchMatchNumber;
     final hasSearch = logState.searchQuery.isNotEmpty;
+    if (_controller.text != logState.searchQuery) {
+      _controller.value = TextEditingValue(
+        text: logState.searchQuery,
+        selection: TextSelection.collapsed(offset: logState.searchQuery.length),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -99,7 +111,9 @@ class _LogSearchBarState extends ConsumerState<LogSearchBar> {
             onPressed: matchCount == 0
                 ? null
                 : () {
-                    ref.read(logProvider(widget.podKey).notifier).goToPreviousSearchMatch();
+                    ref
+                        .read(logProvider(widget.podKey).notifier)
+                        .goToPreviousSearchMatch();
                   },
             tooltip: 'Previous match',
           ),
@@ -108,7 +122,9 @@ class _LogSearchBarState extends ConsumerState<LogSearchBar> {
             onPressed: matchCount == 0
                 ? null
                 : () {
-                    ref.read(logProvider(widget.podKey).notifier).goToNextSearchMatch();
+                    ref
+                        .read(logProvider(widget.podKey).notifier)
+                        .goToNextSearchMatch();
                   },
             tooltip: 'Next match',
           ),

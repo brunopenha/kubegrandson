@@ -75,6 +75,7 @@ class LogState {
   final bool fatalOnly;
   final bool unknowOnly;
   final bool showTimestamps;
+  final bool showPodNames;
   final int selectedSearchMatchIndex;
 
   LogState({
@@ -92,6 +93,7 @@ class LogState {
     this.fatalOnly = false,
     this.unknowOnly = false,
     this.showTimestamps = false,
+    this.showPodNames = false,
     this.selectedSearchMatchIndex = -1,
   });
 
@@ -110,6 +112,7 @@ class LogState {
     bool? fatalOnly,
     bool? unknowOnly,
     bool? showTimestamps,
+    bool? showPodNames,
     int? selectedSearchMatchIndex,
   }) {
     return LogState(
@@ -129,6 +132,7 @@ class LogState {
       fatalOnly: fatalOnly ?? this.fatalOnly,
       unknowOnly: unknowOnly ?? this.unknowOnly,
       showTimestamps: showTimestamps ?? this.showTimestamps,
+      showPodNames: showPodNames ?? this.showPodNames,
       selectedSearchMatchIndex:
           selectedSearchMatchIndex ?? this.selectedSearchMatchIndex,
     );
@@ -145,7 +149,11 @@ class LogNotifier extends StateNotifier<LogState> {
   final BehaviorSubject<List<LogEntry>> _logsController =
       BehaviorSubject<List<LogEntry>>.seeded([]);
   final List<StreamSubscription<String>> _subscriptions = [];
+  final Set<String> _streamingPodNames = {};
+  final List<LogEntry> _pendingLogEntries = [];
+  Timer? _logFlushTimer;
   int _lineNumber = 0;
+  int _streamGeneration = 0;
 
   LogNotifier(
     this._kubernetesService, {
@@ -174,44 +182,37 @@ class LogNotifier extends StateNotifier<LogState> {
     String? sourceLabel,
     String? containerName,
     int tailLines = 100,
+    bool clearExistingLogs = true,
+    bool markPodStoppedOnDone = false,
+    bool retryInitialConnection = false,
   }) async {
     await _cancelSubscriptions();
-    _lineNumber = 0;
-    state = state.copyWith(logs: [], isLoading: true, error: null);
+    final streamGeneration = _streamGeneration;
+    if (clearExistingLogs) {
+      _discardPendingLogs();
+      _lineNumber = 0;
+    } else {
+      _flushPendingLogs();
+    }
+    state = state.copyWith(
+      logs: clearExistingLogs ? [] : state.logs,
+      isLoading: true,
+      error: null,
+    );
 
     try {
       for (final podName in podNames) {
-        final subscription = _kubernetesService
-            .streamLogs(
+        _streamingPodNames.add(podName);
+        _connectPodStream(
           namespace: namespace,
           podName: podName,
+          sourceLabel: sourceLabel,
           containerName: containerName,
           tailLines: tailLines,
-          follow: true,
-        )
-            .listen(
-          (logLine) {
-            final entry = LogEntry.fromRaw(
-              logLine,
-              ++_lineNumber,
-              source: sourceLabel ?? podName,
-            );
-
-            final currentLogs = List<LogEntry>.from(state.logs)..add(entry);
-            if (currentLogs.length > _maxLogLines) {
-              currentLogs.removeRange(0, currentLogs.length - _maxLogLines);
-            }
-            state = state.copyWith(logs: currentLogs, isLoading: false);
-            _logsController.add(currentLogs);
-          },
-          onError: (Object error) {
-            state = state.copyWith(
-              isLoading: false,
-              error: error.toString(),
-            );
-          },
+          markPodStoppedOnDone: markPodStoppedOnDone,
+          retryInitialConnection: retryInitialConnection,
+          streamGeneration: streamGeneration,
         );
-        _subscriptions.add(subscription);
       }
 
       state = state.copyWith(isLoading: false);
@@ -221,6 +222,124 @@ class LogNotifier extends StateNotifier<LogState> {
         error: e.toString(),
       );
     }
+  }
+
+  void addStreamingPods({
+    required String namespace,
+    required Iterable<String> podNames,
+    String? containerName,
+    int tailLines = 100,
+    bool markPodStoppedOnDone = true,
+    bool retryInitialConnection = true,
+  }) {
+    final streamGeneration = _streamGeneration;
+    for (final podName in podNames) {
+      if (!_streamingPodNames.add(podName)) continue;
+      _connectPodStream(
+        namespace: namespace,
+        podName: podName,
+        containerName: containerName,
+        tailLines: tailLines,
+        markPodStoppedOnDone: markPodStoppedOnDone,
+        retryInitialConnection: retryInitialConnection,
+        streamGeneration: streamGeneration,
+      );
+    }
+  }
+
+  void _connectPodStream({
+    required String namespace,
+    required String podName,
+    required int tailLines,
+    required bool markPodStoppedOnDone,
+    required bool retryInitialConnection,
+    required int streamGeneration,
+    String? sourceLabel,
+    String? containerName,
+    int attempt = 0,
+  }) {
+    if (streamGeneration != _streamGeneration || !mounted) return;
+
+    var receivedLogs = false;
+    var retryScheduled = false;
+    final subscription = _kubernetesService
+        .streamLogs(
+      namespace: namespace,
+      podName: podName,
+      containerName: containerName,
+      tailLines: tailLines,
+      follow: true,
+    )
+        .listen(
+      (logLine) {
+        if (streamGeneration != _streamGeneration) return;
+        receivedLogs = true;
+        final entry = LogEntry.fromRaw(
+          logLine,
+          ++_lineNumber,
+          source: podName,
+        );
+
+        _enqueueLogEntry(entry);
+      },
+      onError: (Object error) {
+        if (streamGeneration != _streamGeneration) return;
+        if (retryInitialConnection && !receivedLogs && attempt < 29) {
+          retryScheduled = true;
+          Future<void>.delayed(const Duration(seconds: 2), () {
+            _connectPodStream(
+              namespace: namespace,
+              podName: podName,
+              sourceLabel: sourceLabel,
+              containerName: containerName,
+              tailLines: tailLines,
+              markPodStoppedOnDone: markPodStoppedOnDone,
+              retryInitialConnection: retryInitialConnection,
+              streamGeneration: streamGeneration,
+              attempt: attempt + 1,
+            );
+          });
+          return;
+        }
+        _streamingPodNames.remove(podName);
+        addStreamErrorMarker(podName, error);
+      },
+      onDone: () {
+        if (streamGeneration != _streamGeneration || retryScheduled) return;
+        _streamingPodNames.remove(podName);
+        if (markPodStoppedOnDone) addPodStoppedMarker(podName);
+      },
+    );
+    _subscriptions.add(subscription);
+  }
+
+  void _enqueueLogEntry(LogEntry entry) {
+    _pendingLogEntries.add(entry);
+    _logFlushTimer ??= Timer(
+      const Duration(milliseconds: 100),
+      _flushPendingLogs,
+    );
+  }
+
+  void _flushPendingLogs() {
+    _logFlushTimer?.cancel();
+    _logFlushTimer = null;
+    if (_pendingLogEntries.isEmpty || !mounted) return;
+
+    final entries = List<LogEntry>.from(_pendingLogEntries);
+    _pendingLogEntries.clear();
+    final currentLogs = List<LogEntry>.from(state.logs)..addAll(entries);
+    if (currentLogs.length > _maxLogLines) {
+      currentLogs.removeRange(0, currentLogs.length - _maxLogLines);
+    }
+    state = state.copyWith(logs: currentLogs, isLoading: false);
+    _logsController.add(currentLogs);
+  }
+
+  void _discardPendingLogs() {
+    _logFlushTimer?.cancel();
+    _logFlushTimer = null;
+    _pendingLogEntries.clear();
   }
 
   void toggleAutoScroll() {
@@ -237,6 +356,7 @@ class LogNotifier extends StateNotifier<LogState> {
 
   @visibleForTesting
   void replaceLogs(List<LogEntry> logs) {
+    _discardPendingLogs();
     state = state.copyWith(
       logs: logs,
       isLoading: false,
@@ -261,11 +381,13 @@ class LogNotifier extends StateNotifier<LogState> {
   }
 
   void clearLogs() {
+    _discardPendingLogs();
     state = state.copyWith(logs: []);
     _logsController.add([]);
   }
 
   void addMarker() {
+    _flushPendingLogs();
     final now = DateTime.now();
     final text = '$markerLine ${now.toIso8601String()} $markerLine';
     final entry = LogEntry(
@@ -283,6 +405,63 @@ class LogNotifier extends StateNotifier<LogState> {
     }
 
     state = state.copyWith(logs: currentLogs, selectedLogEntry: entry);
+    _logsController.add(currentLogs);
+  }
+
+  void addPodStoppedMarker(String podName) {
+    _flushPendingLogs();
+    final entry = LogEntry(
+      text: '-------- pod "$podName" stopped --------',
+      timestamp: DateTime.now(),
+      lineNumber: ++_lineNumber,
+      metadata: null,
+      source: 'marker',
+      level: 'marker',
+    );
+
+    final currentLogs = List<LogEntry>.from(state.logs)..add(entry);
+    if (currentLogs.length > _maxLogLines) {
+      currentLogs.removeRange(0, currentLogs.length - _maxLogLines);
+    }
+    state = state.copyWith(logs: currentLogs);
+    _logsController.add(currentLogs);
+  }
+
+  void addPodStartingMarker(String podName) {
+    _flushPendingLogs();
+    final entry = LogEntry(
+      text: '---- Pod starting $podName ----',
+      timestamp: DateTime.now(),
+      lineNumber: ++_lineNumber,
+      metadata: null,
+      source: 'marker',
+      level: 'marker',
+    );
+
+    final currentLogs = List<LogEntry>.from(state.logs)..add(entry);
+    if (currentLogs.length > _maxLogLines) {
+      currentLogs.removeRange(0, currentLogs.length - _maxLogLines);
+    }
+    state = state.copyWith(logs: currentLogs);
+    _logsController.add(currentLogs);
+  }
+
+  void addStreamErrorMarker(String podName, Object error) {
+    _flushPendingLogs();
+    final entry = LogEntry(
+      text: '---- Failed to stream pod "$podName": $error ----',
+      timestamp: DateTime.now(),
+      lineNumber: ++_lineNumber,
+      metadata: null,
+      source: 'marker',
+      level: 'marker',
+    );
+
+    final currentLogs = List<LogEntry>.from(state.logs)..add(entry);
+    if (currentLogs.length > _maxLogLines) {
+      currentLogs.removeRange(0, currentLogs.length - _maxLogLines);
+    }
+    state = state.copyWith(logs: currentLogs, isLoading: false);
     _logsController.add(currentLogs);
   }
 
@@ -350,6 +529,7 @@ class LogNotifier extends StateNotifier<LogState> {
 
   @override
   void dispose() {
+    _discardPendingLogs();
     _cancelSubscriptions();
     _logsController.close();
     super.dispose();
@@ -413,7 +593,13 @@ class LogNotifier extends StateNotifier<LogState> {
     state = state.copyWith(showTimestamps: enabled);
   }
 
+  void setShowPodNames(bool enabled) {
+    state = state.copyWith(showPodNames: enabled);
+  }
+
   Future<void> _cancelSubscriptions() async {
+    _streamGeneration++;
+    _streamingPodNames.clear();
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }

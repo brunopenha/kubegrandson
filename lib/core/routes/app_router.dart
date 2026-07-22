@@ -24,14 +24,22 @@ class AppRouter {
               .map(Uri.decodeComponent)
               .toList();
           final container = state.uri.queryParameters['container'];
+          final groups = state.uri.queryParameters['groups']
+              ?.split(',')
+              .where((value) => value.isNotEmpty)
+              .map(Uri.decodeComponent)
+              .toList();
           final importPath = state.uri.queryParameters['importPath'];
+          final initialSearchQuery = state.uri.queryParameters['search'];
 
           return LogViewerScreen(
             namespace: namespace,
             podName: pod,
             podNames: pods ?? [pod],
+            podGroupNames: groups ?? const [],
             containerName: container,
             initialImportPath: importPath,
+            initialSearchQuery: initialSearchQuery,
           );
         },
       ),

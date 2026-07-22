@@ -24,37 +24,26 @@ class LogListView extends ConsumerStatefulWidget {
 }
 
 class _LogListViewState extends ConsumerState<LogListView> {
-  @override
-  void initState() {
-    super.initState();
-    widget.positionsListener.itemPositions.addListener(_onScroll);
-  }
+  bool _autoScrollScheduled = false;
+  int _pendingScrollIndex = -1;
+  double _pendingScrollAlignment = 0.9;
 
-  void _onScroll() {
-    final logState = ref.read(logProvider(widget.podKey));
-    if (logState.autoScroll) {
-      final positions = widget.positionsListener.itemPositions.value;
-      if (positions.isNotEmpty) {
-        final lastVisibleIndex = positions
-            .where((position) => position.itemTrailingEdge > 0)
-            .reduce((a, b) => a.index > b.index ? a : b)
-            .index;
+  void _scheduleJumpTo(int index, {double alignment = 0.9}) {
+    if (index < 0) return;
+    _pendingScrollIndex = index;
+    _pendingScrollAlignment = alignment;
+    if (_autoScrollScheduled) return;
+    _autoScrollScheduled = true;
 
-        final notifier = ref.read(logProvider(widget.podKey).notifier);
-        final totalLogs = notifier.filteredLogs.length;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _autoScrollScheduled = false;
+      if (!mounted || !widget.scrollController.isAttached) return;
 
-        if (lastVisibleIndex >= totalLogs - 5) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (widget.scrollController.isAttached) {
-              widget.scrollController.scrollTo(
-                index: totalLogs - 1,
-                duration: const Duration(milliseconds: 300),
-              );
-            }
-          });
-        }
-      }
-    }
+      widget.scrollController.jumpTo(
+        index: _pendingScrollIndex,
+        alignment: _pendingScrollAlignment,
+      );
+    });
   }
 
   @override
@@ -64,32 +53,32 @@ class _LogListViewState extends ConsumerState<LogListView> {
     final logs = logNotifier.filteredLogs;
     final settings = ref.watch(settingsProvider);
 
+    ref.listen(logProvider(widget.podKey), (previous, next) {
+      final selected = next.selectedLogEntry;
+      if (selected != null && selected != previous?.selectedLogEntry) {
+        final index = ref
+            .read(logProvider(widget.podKey).notifier)
+            .filteredLogs
+            .indexOf(selected);
+        _scheduleJumpTo(index, alignment: 0.5);
+        return;
+      }
+
+      final resumed = previous?.autoScroll == false && next.autoScroll;
+      final receivedLogs = !identical(previous?.logs, next.logs);
+      if (next.autoScroll && (resumed || receivedLogs)) {
+        final lastIndex =
+            ref.read(logProvider(widget.podKey).notifier).filteredLogs.length -
+                1;
+        _scheduleJumpTo(lastIndex);
+      }
+    });
+
     if (logs.isEmpty) {
       return const Center(
         child: Text('No logs available'),
       );
     }
-
-    ref.listen(logProvider(widget.podKey), (previous, next) {
-      final selected = next.selectedLogEntry;
-      if (selected == null) return;
-
-      final index = ref
-          .read(logProvider(widget.podKey).notifier)
-          .filteredLogs
-          .indexOf(selected);
-
-      if (index < 0) return;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (widget.scrollController.isAttached) {
-          widget.scrollController.scrollTo(
-            index: index,
-            duration: const Duration(milliseconds: 250),
-          );
-        }
-      });
-    });
 
     return ScrollablePositionedList.builder(
       itemCount: logs.length,
@@ -99,13 +88,14 @@ class _LogListViewState extends ConsumerState<LogListView> {
         final log = logs[index];
         final selected = logState.selectedLogEntry;
         final isSelected = selected == log;
+        void toggleSelection() {
+          ref
+              .read(logProvider(widget.podKey).notifier)
+              .selectLog(isSelected ? null : log);
+        }
 
         return InkWell(
-          onTap: () {
-            ref
-                .read(logProvider(widget.podKey).notifier)
-                .selectLog(isSelected ? null : log);
-          },
+          onTap: toggleSelection,
           onSecondaryTap: () {
             _showContextMenu(context, log.text);
           },
@@ -138,6 +128,26 @@ class _LogListViewState extends ConsumerState<LogListView> {
                   ),
                 ),
                 const SizedBox(width: 6),
+                if (logState.showPodNames) ...[
+                  SizedBox(
+                    width: 340,
+                    child: Tooltip(
+                      message: log.source ?? '',
+                      child: Text(
+                        log.source ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: const Color(0xff7dcfff),
+                          fontSize: settings.logFontSize,
+                          height: 1,
+                          fontFamily: 'RobotoMono',
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Expanded(
                   child: SelectableText.rich(
                     _highlightedLogLine(
@@ -146,6 +156,7 @@ class _LogListViewState extends ConsumerState<LogListView> {
                       logState.searchQuery,
                     ),
                     maxLines: 1,
+                    onTap: toggleSelection,
                   ),
                 ),
               ],
@@ -203,11 +214,5 @@ class _LogListViewState extends ConsumerState<LogListView> {
         ),
       ],
     );
-  }
-
-  @override
-  void dispose() {
-    widget.positionsListener.itemPositions.removeListener(_onScroll);
-    super.dispose();
   }
 }

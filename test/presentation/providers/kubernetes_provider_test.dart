@@ -16,6 +16,52 @@ Future<List<KubePod>> _readFilteredPods(ProviderContainer container) async {
 }
 
 void main() {
+  group('reconcilePodSelection', () {
+    test('remove pods que deixaram de existir apos um restart', () {
+      final pods = [
+        KubePod(
+          name: 'api-new',
+          namespace: 'default',
+          phase: 'Running',
+          restartCount: 0,
+        ),
+        KubePod(
+          name: 'web-current',
+          namespace: 'default',
+          phase: 'Running',
+          restartCount: 0,
+        ),
+      ];
+
+      final result = reconcilePodSelection(
+        {'api-old', 'web-current'},
+        pods,
+      );
+
+      expect(result, {'web-current'});
+    });
+  });
+
+  group('podGroupName', () {
+    test('mantem a identidade do microservice quando o nome do pod muda', () {
+      final oldPod = KubePod(
+        name: 'api-abc-123',
+        namespace: 'default',
+        phase: 'Running',
+        labels: const {'app': 'api'},
+      );
+      final restartedPod = KubePod(
+        name: 'api-def-456',
+        namespace: 'default',
+        phase: 'Running',
+        labels: const {'app': 'api'},
+      );
+
+      expect(podGroupName(oldPod), podGroupName(restartedPod));
+      expect(podGroupName(restartedPod), 'api');
+    });
+  });
+
   group('PodFilterNotifier', () {
     test('setSearchQuery atualiza query', () {
       final container = ProviderContainer();
@@ -77,10 +123,42 @@ void main() {
   });
 
   group('filteredPodsProvider', () {
+    test('filtra pelos pods encontrados na busca global de logs', () async {
+      final pods = [
+        KubePod(
+          name: 'api-1',
+          namespace: 'default',
+          phase: 'Running',
+        ),
+        KubePod(
+          name: 'worker-1',
+          namespace: 'default',
+          phase: 'Running',
+        ),
+      ];
+      final container = ProviderContainer(
+        overrides: [currentPodsProvider.overrideWith((ref) async => pods)],
+      );
+      addTearDown(container.dispose);
+      container.read(podLogSearchMatchesProvider.notifier).state = {'worker-1'};
+
+      final filtered = await _readFilteredPods(container);
+
+      expect(filtered.map((pod) => pod.name), ['worker-1']);
+    });
+
     test('filtra por searchQuery (case-insensitive)', () async {
       final pods = [
-        KubePod(name: 'api-1', namespace: 'default', phase: 'Running', restartCount: 0),
-        KubePod(name: 'web-1', namespace: 'default', phase: 'Running', restartCount: 0),
+        KubePod(
+            name: 'api-1',
+            namespace: 'default',
+            phase: 'Running',
+            restartCount: 0),
+        KubePod(
+            name: 'web-1',
+            namespace: 'default',
+            phase: 'Running',
+            restartCount: 0),
       ];
 
       final container = ProviderContainer(
@@ -98,8 +176,16 @@ void main() {
 
     test('filtra por phase', () async {
       final pods = [
-        KubePod(name: 'p1', namespace: 'default', phase: 'Running', restartCount: 0),
-        KubePod(name: 'p2', namespace: 'default', phase: 'Pending', restartCount: 0),
+        KubePod(
+            name: 'p1',
+            namespace: 'default',
+            phase: 'Running',
+            restartCount: 0),
+        KubePod(
+            name: 'p2',
+            namespace: 'default',
+            phase: 'Pending',
+            restartCount: 0),
       ];
 
       final container = ProviderContainer(
@@ -117,9 +203,21 @@ void main() {
 
     test('showOnlyWithErrors filtra por restartCount>0 ou isFailed', () async {
       final pods = [
-        KubePod(name: 'ok', namespace: 'default', phase: 'Running', restartCount: 0),
-        KubePod(name: 'restarts', namespace: 'default', phase: 'Running', restartCount: 2),
-        KubePod(name: 'failed', namespace: 'default', phase: 'Failed', restartCount: 0),
+        KubePod(
+            name: 'ok',
+            namespace: 'default',
+            phase: 'Running',
+            restartCount: 0),
+        KubePod(
+            name: 'restarts',
+            namespace: 'default',
+            phase: 'Running',
+            restartCount: 2),
+        KubePod(
+            name: 'failed',
+            namespace: 'default',
+            phase: 'Failed',
+            restartCount: 0),
       ];
 
       final container = ProviderContainer(

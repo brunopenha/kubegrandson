@@ -92,6 +92,17 @@ class LogFilterToolbar extends ConsumerWidget {
           ),
           const Spacer(),
           Checkbox(
+            value: logState.showPodNames,
+            onChanged: (value) {
+              logNotifier.setShowPodNames(value ?? false);
+            },
+          ),
+          const Text(
+            'Show Pod Name',
+            style: TextStyle(color: Color(0xFFE3E6E8)),
+          ),
+          const SizedBox(width: 16),
+          Checkbox(
             value: logState.showTimestamps,
             onChanged: (value) {
               logNotifier.setShowTimestamps(value ?? false);

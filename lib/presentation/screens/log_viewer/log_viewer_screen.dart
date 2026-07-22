@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:kubegrandson/presentation/providers/settings_notifier.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../providers/log_provider.dart';
+import '../../providers/kubernetes_provider.dart';
 import '../../shortcuts/log_navigation_shortcuts.dart';
 import '../../providers/theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -23,16 +25,20 @@ class LogViewerScreen extends ConsumerStatefulWidget {
   final String namespace;
   final String podName;
   final List<String> podNames;
+  final List<String> podGroupNames;
   final String? containerName;
   final String? initialImportPath;
+  final String? initialSearchQuery;
 
   const LogViewerScreen({
     super.key,
     required this.namespace,
     required this.podName,
     this.podNames = const [],
+    this.podGroupNames = const [],
     this.containerName,
     this.initialImportPath,
+    this.initialSearchQuery,
   });
 
   @override
@@ -47,11 +53,23 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
   double _jsonViewerWidth = 460.0;
   static const double _minJsonViewerWidth = 200.0;
   static const double _maxJsonViewerWidth = 900.0;
+  late List<String> _activePodNames;
+  bool _isRestartingLogStreaming = false;
 
   @override
   void initState() {
     super.initState();
+    _activePodNames = List<String>.from(
+      widget.podNames.isEmpty ? [widget.podName] : widget.podNames,
+    )..sort();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final initialSearchQuery = widget.initialSearchQuery?.trim();
+      if (initialSearchQuery != null && initialSearchQuery.isNotEmpty) {
+        ref
+            .read(logProvider(_podKey).notifier)
+            .setSearchQuery(initialSearchQuery);
+      }
       final importPath = widget.initialImportPath;
       if (importPath == null) {
         _startLogStreaming();
@@ -61,13 +79,108 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
     });
   }
 
-  void _startLogStreaming() {
+  Future<void> _restartLogStreaming() async {
+    if (_isRestartingLogStreaming) return;
+    setState(() => _isRestartingLogStreaming = true);
+
+    try {
+      var podNames = List<String>.from(_activePodNames);
+      if (widget.podGroupNames.isNotEmpty) {
+        podNames = await _waitForReadyTargetPods();
+      }
+
+      if (!mounted) return;
+      if (podNames.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No running pods found')),
+        );
+        return;
+      }
+
+      final previousPodNames = _activePodNames.toSet();
+      final newPodNames = podNames
+          .where((podName) => !previousPodNames.contains(podName))
+          .toList();
+      final notifier = ref.read(logProvider(_podKey).notifier);
+      for (final podName in newPodNames) {
+        notifier.addPodStartingMarker(podName);
+      }
+
+      setState(() => _activePodNames = podNames);
+      if (newPodNames.isEmpty) {
+        _startLogStreaming(preserveLogs: true);
+      } else {
+        notifier.addStreamingPods(
+          namespace: widget.namespace,
+          podNames: newPodNames,
+          containerName: widget.containerName,
+        );
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Restarted log streaming for ${podNames.length} pod(s)',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to restart log streaming: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRestartingLogStreaming = false);
+      }
+    }
+  }
+
+  Future<List<String>> _waitForReadyTargetPods() async {
+    final service = ref.read(kubernetesServiceProvider);
+    final targetGroups = widget.podGroupNames.toSet();
+    final previousPodNames = _activePodNames.toSet();
+    var readyPodNames = <String>[];
+
+    for (var attempt = 0; attempt < 30; attempt++) {
+      final pods = await service.fetchPods(widget.namespace);
+      readyPodNames = pods
+          .where((pod) => targetGroups.contains(podGroupName(pod)))
+          .where((pod) {
+            if (!pod.isRunning) return false;
+            final statuses = pod.containerStatuses;
+            return statuses == null ||
+                statuses.isEmpty ||
+                statuses.every((status) => status.ready);
+          })
+          .map((pod) => pod.name)
+          .toList()
+        ..sort();
+
+      final readyNames = readyPodNames.toSet();
+      final samePods = readyNames.length == previousPodNames.length &&
+          readyNames.containsAll(previousPodNames);
+      final replacementsReady =
+          readyPodNames.length >= previousPodNames.length &&
+              readyNames.any((name) => !previousPodNames.contains(name));
+      if (samePods || replacementsReady) return readyPodNames;
+
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (!mounted) return const [];
+    }
+
+    return readyPodNames;
+  }
+
+  void _startLogStreaming({bool preserveLogs = false}) {
     final podKey = _podKey;
     ref.read(logProvider(podKey).notifier).startStreamingForPods(
           namespace: widget.namespace,
           podNames: _podNames,
           sourceLabel: widget.podName,
           containerName: widget.containerName,
+          clearExistingLogs: !preserveLogs,
+          markPodStoppedOnDone: true,
+          retryInitialConnection: true,
         );
   }
 
@@ -116,6 +229,19 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
             },
           ),
           actions: [
+            IconButton(
+              icon: _isRestartingLogStreaming
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 20),
+              color: Colors.white70,
+              onPressed:
+                  _isRestartingLogStreaming ? null : _restartLogStreaming,
+              tooltip: 'Restart log streaming',
+            ),
             IconButton(
               icon: Icon(
                 logState.autoScroll ? Icons.pause : Icons.play_arrow,
@@ -481,7 +607,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
   }
 
   List<String> get _podNames =>
-      widget.podNames.isEmpty ? [widget.podName] : widget.podNames;
+      widget.initialImportPath == null ? _activePodNames : widget.podNames;
 
   String get _logTitle {
     if (widget.initialImportPath != null) {
@@ -495,5 +621,10 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen> {
     return 'Logs: ${widget.podName} (${_podNames.length} pods)';
   }
 
-  String get _podKey => '${widget.namespace}/${_podNames.join(',')}';
+  String get _podKey {
+    final identity = widget.podGroupNames.isEmpty
+        ? _podNames.join(',')
+        : widget.podGroupNames.join(',');
+    return '${widget.namespace}/$identity';
+  }
 }
