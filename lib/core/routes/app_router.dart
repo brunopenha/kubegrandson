@@ -4,6 +4,8 @@ import '../../presentation/screens/home/home_screen.dart';
 import '../../presentation/screens/config_maps/config_map_screen.dart';
 import '../../presentation/screens/log_viewer/log_viewer_screen.dart';
 import '../../presentation/screens/settings/settings_screen.dart';
+import '../../presentation/screens/mock_server/mock_server_screen.dart';
+import '../../presentation/screens/xml_analyzer/xml_analyzer_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -46,6 +48,14 @@ class AppRouter {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/mock-services',
+        builder: (context, state) => const MockServerScreen(),
+      ),
+      GoRoute(
+        path: '/xml-analyzer',
+        builder: (context, state) => const XmlAnalyzerScreen(),
       ),
       GoRoute(
         path: '/configmaps/:namespace/:group',

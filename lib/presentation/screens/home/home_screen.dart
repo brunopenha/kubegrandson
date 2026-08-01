@@ -68,6 +68,16 @@ class HomeScreen extends ConsumerWidget {
             onPressed: () => _promptGcpCredentialsRefresh(context, ref),
           ),
           IconButton(
+            icon: const Icon(Icons.dns_outlined),
+            tooltip: 'Offline mock microservices',
+            onPressed: () => context.go('/mock-services'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.data_object),
+            tooltip: 'JSON and XML analyzer',
+            onPressed: () => context.go('/xml-analyzer'),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => context.go('/settings'),
           ),
