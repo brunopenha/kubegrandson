@@ -182,6 +182,47 @@ In **Settings**, configure:
 
 - `Kubeconfig File` (used by the app for initialization and context switching)
 
+### Kubernetes proxy configuration
+
+Kubegrandson can use the proxy environment inherited from the operating
+system or an application-specific configuration. This is useful when
+`kubectl` can reach a local cluster, such as minikube, but the desktop app
+tries to send the Kubernetes API request through a corporate proxy.
+
+In **Settings > Kubernetes Configuration**:
+
+1. Enable **Use operating-system proxy settings** to use `HTTP_PROXY`,
+   `HTTPS_PROXY`, and `NO_PROXY`. Lowercase variants commonly used on Linux
+   (`http_proxy`, `https_proxy`, and `no_proxy`) are also supported. The
+   values visible to the running application are displayed in Settings.
+2. Disable that option to edit a proxy URL and no-proxy list used only by
+   Kubegrandson. This does not change the operating-system configuration.
+3. Select **Save and apply proxy** to persist and apply the settings without
+   waiting for a network request.
+4. Select **Test connection** to check access to the Kubernetes API
+   separately.
+
+The application no-proxy list accepts comma-separated host names, domain
+suffixes, exact IP addresses, and IPv4 CIDR ranges. For example:
+
+```text
+localhost,127.0.0.1,.example.com,10.0.0.0/8,192.168.0.0/16
+```
+
+CIDR matching is handled by Kubegrandson because the Dart system HTTP client
+does not consistently interpret CIDR entries in `NO_PROXY`. For a minikube
+API at `https://192.168.99.100:8443`, either `192.168.99.100` or
+`192.168.0.0/16` bypasses the proxy.
+
+For command-line diagnosis using the current kubeconfig and proxy environment:
+
+```bash
+dart run tools/check_app_proxy.dart
+```
+
+The output shows the Kubernetes endpoint, the selected route (`DIRECT` or
+`PROXY`), and the server version when the connection succeeds.
+
 For AWS EKS, use the **AWS Credentials** action in the home toolbar. Provide
 profile, region, cluster name, and optional account/SSO metadata. The app runs:
 

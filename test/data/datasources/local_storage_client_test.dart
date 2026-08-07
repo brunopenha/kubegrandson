@@ -51,9 +51,27 @@ void main() {
 
     await storage.setDefaultNamespace('kube-system');
     await storage.setAutoRefreshIntervalSeconds(30);
+    await storage.setKubernetesProxyUrl('http://proxy.example.com:8080');
+    await storage.setKubernetesNoProxy('localhost,192.168.0.0/16');
+    await storage.setKubernetesUseSystemProxy(false);
 
     expect(await storage.getDefaultNamespace(), 'kube-system');
     expect(await storage.getAutoRefreshIntervalSeconds(), 30);
+    expect(
+      await storage.getKubernetesProxyUrl(),
+      'http://proxy.example.com:8080',
+    );
+    expect(
+      await storage.getKubernetesNoProxy(),
+      'localhost,192.168.0.0/16',
+    );
+    expect(await storage.getKubernetesUseSystemProxy(), isFalse);
+  });
+
+  test('uses operating-system proxy settings by default', () async {
+    final storage = await LocalStorageClient.getInstance();
+
+    expect(await storage.getKubernetesUseSystemProxy(), isTrue);
   });
 
   test('saves and loads GCP settings', () async {

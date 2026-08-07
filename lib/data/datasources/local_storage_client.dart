@@ -60,6 +60,80 @@ class LocalStorageClient {
     }
   }
 
+  Future<String?> getKubernetesProxyUrl() async {
+    try {
+      return _prefs?.getString(AppConstants.kubernetesProxyUrlKey);
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to get Kubernetes proxy URL', e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<bool> setKubernetesProxyUrl(String value) async {
+    try {
+      return await _prefs?.setString(
+            AppConstants.kubernetesProxyUrlKey,
+            value,
+          ) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to set Kubernetes proxy URL', e, stackTrace);
+      return false;
+    }
+  }
+
+  Future<String?> getKubernetesNoProxy() async {
+    try {
+      return _prefs?.getString(AppConstants.kubernetesNoProxyKey);
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to get Kubernetes no-proxy list', e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<bool> setKubernetesNoProxy(String value) async {
+    try {
+      return await _prefs?.setString(
+            AppConstants.kubernetesNoProxyKey,
+            value,
+          ) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error('Failed to set Kubernetes no-proxy list', e, stackTrace);
+      return false;
+    }
+  }
+
+  Future<bool> getKubernetesUseSystemProxy() async {
+    try {
+      return _prefs?.getBool(AppConstants.kubernetesUseSystemProxyKey) ?? true;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Failed to get system proxy preference',
+        e,
+        stackTrace,
+      );
+      return true;
+    }
+  }
+
+  Future<bool> setKubernetesUseSystemProxy(bool value) async {
+    try {
+      return await _prefs?.setBool(
+            AppConstants.kubernetesUseSystemProxyKey,
+            value,
+          ) ??
+          false;
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'Failed to set system proxy preference',
+        e,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
   // Theme Preference
   Future<String?> getThemePreference() async {
     try {

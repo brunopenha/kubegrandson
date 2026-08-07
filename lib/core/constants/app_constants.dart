@@ -8,6 +8,10 @@ class AppConstants {
   static const String kubeConfigPathKey =
       'kubeconfig_path'; // Alias for consistency
   static const String currentContextKey = 'current_context';
+  static const String kubernetesProxyUrlKey = 'kubernetes_proxy_url';
+  static const String kubernetesNoProxyKey = 'kubernetes_no_proxy';
+  static const String kubernetesUseSystemProxyKey =
+      'kubernetes_use_system_proxy';
   static const String defaultNamespaceKey = 'default_namespace';
   static const String themeKey = 'theme_mode';
   static const String themePreferenceKey = 'theme_preference'; // Alias

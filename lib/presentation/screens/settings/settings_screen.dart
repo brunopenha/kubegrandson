@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,6 +43,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final TextEditingController _kubeconfigController = TextEditingController();
+  final TextEditingController _proxyUrlController = TextEditingController();
+  final TextEditingController _noProxyController = TextEditingController();
   final TextEditingController _awsProfileController = TextEditingController();
   final TextEditingController _awsRegionController = TextEditingController();
   final TextEditingController _awsClusterController = TextEditingController();
@@ -50,6 +54,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final TextEditingController _awsSsoRegionController = TextEditingController();
   final FocusNode _shortcutCaptureFocusNode = FocusNode();
   String? _capturingShortcutAction;
+  bool _useSystemProxy = true;
+
+  String get _systemHttpProxy =>
+      Platform.environment['HTTP_PROXY'] ??
+      Platform.environment['http_proxy'] ??
+      '';
+  String get _systemHttpsProxy =>
+      Platform.environment['HTTPS_PROXY'] ??
+      Platform.environment['https_proxy'] ??
+      '';
+  String get _systemNoProxy =>
+      Platform.environment['NO_PROXY'] ??
+      Platform.environment['no_proxy'] ??
+      '';
+  String get _systemKubernetesProxy =>
+      _systemHttpsProxy.isNotEmpty ? _systemHttpsProxy : _systemHttpProxy;
 
   // ignore: unused_field
   bool _isAwsRefreshing = false;
@@ -69,6 +89,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void dispose() {
     _kubeconfigController.dispose();
+    _proxyUrlController.dispose();
+    _noProxyController.dispose();
     _awsProfileController.dispose();
     _awsRegionController.dispose();
     _awsClusterController.dispose();
@@ -92,6 +114,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     final kubeconfigPath = await storage.getKubeConfigPath();
+    final proxyUrl = await storage.getKubernetesProxyUrl();
+    final noProxy = await storage.getKubernetesNoProxy();
+    final useSystemProxy = await storage.getKubernetesUseSystemProxy();
     final awsProfile = await storage.getAwsProfile();
     final awsRegion = await storage.getAwsRegion();
     final awsCluster = await storage.getAwsClusterName();
@@ -104,6 +129,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     _kubeconfigController.text = kubeconfigPath ?? '';
+    _proxyUrlController.text = proxyUrl ?? _systemKubernetesProxy;
+    _noProxyController.text = noProxy ?? _systemNoProxy;
     _awsProfileController.text = awsProfile ?? inferredProfile ?? '';
     _awsRegionController.text = awsRegion ?? awsContextInfo?.region ?? '';
     _awsClusterController.text =
@@ -112,6 +139,95 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         awsAccountId ?? awsContextInfo?.accountId ?? '';
     _awsSsoStartUrlController.text = awsSsoStartUrl ?? '';
     _awsSsoRegionController.text = awsSsoRegion ?? _awsRegionController.text;
+    setState(() => _useSystemProxy = useSystemProxy);
+  }
+
+  Future<void> _saveProxySettings() async {
+    final proxyUrl = _proxyUrlController.text.trim();
+    final noProxy = _noProxyController.text.trim();
+    final parsedProxy = proxyUrl.isEmpty ? null : Uri.tryParse(proxyUrl);
+    if (!_useSystemProxy &&
+        proxyUrl.isNotEmpty &&
+        (parsedProxy == null ||
+            !parsedProxy.hasScheme ||
+            parsedProxy.host.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Enter a complete proxy URL, for example http://proxy:8080.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final storage = await LocalStorageClient.getInstance();
+      await storage.setKubernetesProxyUrl(proxyUrl);
+      await storage.setKubernetesNoProxy(noProxy);
+      await storage.setKubernetesUseSystemProxy(_useSystemProxy);
+      final effectiveProxyUrl =
+          _useSystemProxy ? _systemKubernetesProxy : proxyUrl;
+      final effectiveNoProxy = _useSystemProxy ? _systemNoProxy : noProxy;
+      await ref.read(kubernetesServiceProvider).initialize(
+            kubeconfigPath: _kubeconfigController.text.trim().isEmpty
+                ? null
+                : _kubeconfigController.text.trim(),
+            proxyUrl: effectiveProxyUrl,
+            noProxy: effectiveNoProxy,
+            verifyConnection: false,
+          );
+      ref.invalidate(initializeProvider);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kubernetes proxy settings saved and applied.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to apply proxy settings: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _testProxyConnection() async {
+    final proxyUrl = _proxyUrlController.text.trim();
+    final noProxy = _noProxyController.text.trim();
+    final effectiveProxyUrl =
+        _useSystemProxy ? _systemKubernetesProxy : proxyUrl;
+    final effectiveNoProxy = _useSystemProxy ? _systemNoProxy : noProxy;
+
+    try {
+      await ref.read(kubernetesServiceProvider).initialize(
+            kubeconfigPath: _kubeconfigController.text.trim().isEmpty
+                ? null
+                : _kubeconfigController.text.trim(),
+            proxyUrl: effectiveProxyUrl,
+            noProxy: effectiveNoProxy,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connection to the Kubernetes API succeeded.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Kubernetes connection test failed: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _pickKubeconfigFile() async {
@@ -272,6 +388,85 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   readOnly: true,
                 ),
+              ),
+              const SizedBox(height: 16),
+              _buildSetting(
+                'Operating-system proxy',
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Use operating-system proxy settings'),
+                      subtitle: const Text(
+                        'Read HTTP_PROXY, HTTPS_PROXY, and NO_PROXY from the application environment on Windows or Linux.',
+                      ),
+                      value: _useSystemProxy,
+                      onChanged: (value) {
+                        setState(() => _useSystemProxy = value);
+                      },
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: _settingsControlBorder),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SelectableText(
+                        'HTTP_PROXY: ${_systemHttpProxy.isEmpty ? '(not set)' : _systemHttpProxy}\n'
+                        'HTTPS_PROXY: ${_systemHttpsProxy.isEmpty ? '(not set)' : _systemHttpsProxy}\n'
+                        'NO_PROXY: ${_systemNoProxy.isEmpty ? '(not set)' : _systemNoProxy}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildSetting(
+                'Application proxy URL',
+                TextField(
+                  controller: _proxyUrlController,
+                  enabled: !_useSystemProxy,
+                  decoration: const InputDecoration(
+                    hintText: 'http://proxy.example.com:8080',
+                    helperText:
+                        'Used only by Kubegrandson when system proxy settings are disabled.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildSetting(
+                'Application no proxy',
+                TextField(
+                  controller: _noProxyController,
+                  enabled: !_useSystemProxy,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    hintText: 'localhost,127.0.0.1,192.168.0.0/16',
+                    helperText:
+                        'Comma-separated hosts, domains, IP addresses, or IPv4 CIDR ranges.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _saveProxySettings,
+                    icon: const Icon(Icons.save),
+                    label: const Text('Save and apply proxy'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _testProxyConnection,
+                    icon: const Icon(Icons.network_check),
+                    label: const Text('Test connection'),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               _buildSetting(

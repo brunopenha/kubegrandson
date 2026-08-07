@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:k8s/k8s.dart' as k8s;
 import 'package:kubeconfig/kubeconfig.dart' as kubeconfig;
 import 'package:path/path.dart' as p;
 
 import '../../core/utils/app_logger.dart';
+import '../../core/network/app_proxy_configuration.dart';
 import '../../data/models/app_state/cluster_context.dart';
 import '../../data/models/kubernetes/config_map.dart' as config_maps;
 import '../../data/models/kubernetes/deployment.dart' as deployments;
@@ -51,6 +53,8 @@ class KubernetesService {
   k8s.ApiClient? _client;
   String? _kubeconfigPath;
   String? _currentContextName;
+  String _proxyUrl = '';
+  String _noProxy = '';
   final Map<String, String> _awsProfileByAccount = <String, String>{};
 
   final k8s.Kubernetes Function() _kubernetesFactory;
@@ -300,8 +304,12 @@ class KubernetesService {
   Future<void> initialize({
     String? kubeconfigPath,
     bool verifyConnection = true,
+    String? proxyUrl,
+    String? noProxy,
   }) async {
     try {
+      if (proxyUrl != null) _proxyUrl = proxyUrl;
+      if (noProxy != null) _noProxy = noProxy;
       final kubernetes = _kubernetesFactory();
 
       // If no path provided, resolve default ~/.kube/config cross‑platform
@@ -314,6 +322,7 @@ class KubernetesService {
 
       _client = kubernetes.client;
       _kubeconfigPath = resolvedPath;
+      _applyProxyConfiguration(_client!.dio);
       _client!.dio.options
         ..connectTimeout =
             const Duration(seconds: 30) // allow more time to connect
@@ -349,6 +358,29 @@ class KubernetesService {
       AppLogger.error('Failed to initialize Kubernetes client', e, stackTrace);
       rethrow;
     }
+  }
+
+  void _applyProxyConfiguration(Dio dio) {
+    if (_proxyUrl.trim().isEmpty && _noProxy.trim().isEmpty) return;
+
+    final adapter = dio.httpClientAdapter;
+    if (adapter is! IOHttpClientAdapter) {
+      AppLogger.warning(
+        'Application proxy settings are unavailable for this HTTP adapter.',
+      );
+      return;
+    }
+
+    final originalFactory = adapter.createHttpClient;
+    final configuration = AppProxyConfiguration(
+      proxyUrl: _proxyUrl,
+      noProxy: _noProxy,
+    );
+    adapter.createHttpClient = () {
+      final httpClient = originalFactory?.call() ?? HttpClient();
+      httpClient.findProxy = configuration.findProxy;
+      return httpClient;
+    };
   }
 
   Future<List<ClusterContext>> fetchContexts() async {

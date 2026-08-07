@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,11 +16,28 @@ final initializeProvider = FutureProvider<void>((ref) async {
   final service = ref.watch(kubernetesServiceProvider);
   final storage = await LocalStorageClient.getInstance();
   final kubeconfigPath = await storage.getKubeConfigPath();
+  final proxyUrl = await storage.getKubernetesProxyUrl();
+  final noProxy = await storage.getKubernetesNoProxy();
+  final useSystemProxy = await storage.getKubernetesUseSystemProxy();
+  final effectiveProxyUrl = useSystemProxy
+      ? Platform.environment['HTTPS_PROXY'] ??
+          Platform.environment['https_proxy'] ??
+          Platform.environment['HTTP_PROXY'] ??
+          Platform.environment['http_proxy'] ??
+          ''
+      : proxyUrl ?? '';
+  final effectiveNoProxy = useSystemProxy
+      ? Platform.environment['NO_PROXY'] ??
+          Platform.environment['no_proxy'] ??
+          ''
+      : noProxy ?? '';
   await service.initialize(
     kubeconfigPath: (kubeconfigPath == null || kubeconfigPath.trim().isEmpty)
         ? null
         : kubeconfigPath.trim(),
     verifyConnection: false,
+    proxyUrl: effectiveProxyUrl,
+    noProxy: effectiveNoProxy,
   );
 });
 
