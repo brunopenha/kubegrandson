@@ -324,8 +324,30 @@ changes and create the tag before running it:
 
 ```bash
 git tag v0.11.0
-RELEASE_TAG=v0.11.0 TARGETS=linux scripts/create_releases.sh
+TARGETS=linux sh scripts/create_releases.sh v0.11.0
 ```
+
+All assets declared in `pubspec.yaml` must be committed before tagging,
+including `documentation/remote-cluster-ssh.md` for the in-app SSH help.
+Files that exist only in the working directory or staging area are not included
+in a build from a tag. If an unpublished local tag was created too early,
+commit the missing files and move that local tag to the corrected commit.
+
+The script accepts the tag as a positional argument or through `RELEASE_TAG`.
+Without either, it builds only the latest listed release. Use `--all` explicitly
+to build every listed release.
+
+To select a specific Flutter SDK, use the same executable for dependency
+resolution and compilation:
+
+```bash
+FLUTTER_BIN=/path/to/flutter/bin/flutter TARGETS=linux \
+  sh scripts/create_releases.sh v0.11.0
+```
+
+Framework errors involving missing `dart:ui` members can indicate mismatched
+Flutter framework and engine revisions. Use a consistent SDK installation;
+updating application dependencies does not fix an SDK mismatch.
 
 Generated files are written to:
 
