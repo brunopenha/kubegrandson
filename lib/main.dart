@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'presentation/providers/kubernetes_provider.dart';
+import 'presentation/providers/ssh_tunnel_provider.dart';
 import 'presentation/providers/theme/app_colors.dart';
 import 'presentation/widgets/common/loading_indicator.dart';
 
@@ -17,9 +18,13 @@ void main() async {
   // Initialize logger
   AppLogger.init();
 
+  final container = ProviderContainer();
+
   // Desktop window configuration
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
+    await windowManager.setPreventClose(true);
+    windowManager.addListener(_SshWindowCleanup(container));
 
     WindowOptions windowOptions = const WindowOptions(
       size: Size(1000, 520),
@@ -37,7 +42,28 @@ void main() async {
     });
   }
 
-  runApp(const ProviderScope(child: KubeGrandsonApp()));
+  runApp(UncontrolledProviderScope(
+      container: container, child: const KubeGrandsonApp()));
+}
+
+class _SshWindowCleanup extends WindowListener {
+  final ProviderContainer container;
+  bool _closing = false;
+  _SshWindowCleanup(this.container);
+
+  @override
+  void onWindowClose() async {
+    if (_closing) return;
+    _closing = true;
+    try {
+      await container
+          .read(sshTunnelProvider)
+          .disconnect()
+          .timeout(const Duration(seconds: 5));
+    } finally {
+      await windowManager.destroy();
+    }
+  }
 }
 
 class HomeScreen extends ConsumerWidget {

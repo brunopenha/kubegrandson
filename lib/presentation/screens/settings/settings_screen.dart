@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/datasources/local_storage_client.dart';
 import '../../providers/kubernetes_provider.dart';
+import '../../providers/ssh_tunnel_provider.dart';
 import '../../providers/settings_notifier.dart';
 import '../../providers/theme/app_colors.dart';
 import '../../providers/theme_provider.dart';
@@ -170,11 +171,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _useSystemProxy ? _systemKubernetesProxy : proxyUrl;
       final effectiveNoProxy = _useSystemProxy ? _systemNoProxy : noProxy;
       await ref.read(kubernetesServiceProvider).initialize(
-            kubeconfigPath: _kubeconfigController.text.trim().isEmpty
-                ? null
-                : _kubeconfigController.text.trim(),
-            proxyUrl: effectiveProxyUrl,
-            noProxy: effectiveNoProxy,
+            kubeconfigPath: ref.read(sshTunnelProvider).kubeconfigPath ??
+                (_kubeconfigController.text.trim().isEmpty
+                    ? null
+                    : _kubeconfigController.text.trim()),
+            proxyUrl:
+                ref.read(sshTunnelProvider).connected ? '' : effectiveProxyUrl,
+            noProxy: ref.read(sshTunnelProvider).connected
+                ? '127.0.0.1,localhost'
+                : effectiveNoProxy,
             verifyConnection: false,
           );
       ref.invalidate(initializeProvider);
@@ -206,11 +211,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     try {
       await ref.read(kubernetesServiceProvider).initialize(
-            kubeconfigPath: _kubeconfigController.text.trim().isEmpty
-                ? null
-                : _kubeconfigController.text.trim(),
-            proxyUrl: effectiveProxyUrl,
-            noProxy: effectiveNoProxy,
+            kubeconfigPath: ref.read(sshTunnelProvider).kubeconfigPath ??
+                (_kubeconfigController.text.trim().isEmpty
+                    ? null
+                    : _kubeconfigController.text.trim()),
+            proxyUrl:
+                ref.read(sshTunnelProvider).connected ? '' : effectiveProxyUrl,
+            noProxy: ref.read(sshTunnelProvider).connected
+                ? '127.0.0.1,localhost'
+                : effectiveNoProxy,
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -244,6 +253,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _kubeconfigController.text = path;
 
     try {
+      await ref.read(sshTunnelProvider).disconnect();
       await ref.read(kubernetesServiceProvider).initialize(
             kubeconfigPath: path,
             verifyConnection: false,
@@ -372,6 +382,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _buildSection(
             'Kubernetes Configuration',
             [
+              ListTile(
+                leading: const Icon(Icons.lan_outlined),
+                title: const Text('Remote cluster over SSH'),
+                subtitle: const Text(
+                    'Connect to Minikube or k3s and manage the SSH tunnel.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.go('/remote-connection'),
+              ),
               _buildSetting(
                 'Kubeconfig File',
                 TextField(

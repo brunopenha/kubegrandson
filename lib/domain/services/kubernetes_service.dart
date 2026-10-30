@@ -664,6 +664,8 @@ class KubernetesService {
     _client = null; // no explicit close needed
   }
 
+  String get defaultKubeconfigPath => _resolveDefaultKubeconfigPath();
+
   String _resolveDefaultKubeconfigPath() {
     final home = _homeDirResolver();
     if (home == null || home.isEmpty) {

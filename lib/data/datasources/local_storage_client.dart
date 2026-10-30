@@ -20,6 +20,14 @@ class LocalStorageClient {
     _instance = null;
   }
 
+  Future<List<String>> getPodLogSearchHistory() async {
+    return _prefs?.getStringList('podLogSearchHistory') ?? [];
+  }
+
+  Future<bool> setPodLogSearchHistory(List<String> terms) async {
+    return await _prefs?.setStringList('podLogSearchHistory', terms) ?? false;
+  }
+
   // Current Context
   Future<String?> getCurrentContext() async {
     try {

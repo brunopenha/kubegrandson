@@ -9,6 +9,7 @@ import 'package:kubegrandson/data/models/kubernetes/pod.dart';
 import 'package:kubegrandson/presentation/widgets/common/cluster_offline.dart';
 
 import '../../providers/kubernetes_provider.dart';
+import '../../providers/ssh_tunnel_provider.dart';
 import '../../providers/theme/app_colors.dart';
 import '../../widgets/common/loading_indicator.dart';
 import '../../widgets/common/main_toolbar.dart';
@@ -49,6 +50,13 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('KubeGrandson - Kubernetes Log Viewer'),
         actions: [
+          IconButton(
+            icon: Icon(ref.watch(sshTunnelProvider).connected
+                ? Icons.link
+                : Icons.lan_outlined),
+            tooltip: 'Remote cluster over SSH',
+            onPressed: () => context.go('/remote-connection'),
+          ),
           IconButton(
             icon: SvgPicture.asset(
               'assets/icons/aws_mark.svg',
@@ -430,7 +438,20 @@ class HomeScreen extends ConsumerWidget {
                                           '/configmaps/${group.namespace}/${Uri.encodeComponent(group.title)}?pods=$query',
                                         );
                                       },
-                                      tooltip: 'ConfigMaps',
+                                      tooltip: 'Edit ConfigMap',
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.apps),
+                                      onPressed: () {
+                                        final query = group.pods
+                                            .map((pod) => pod.name)
+                                            .map(Uri.encodeComponent)
+                                            .join(',');
+                                        context.go(
+                                          '/deployments/${group.namespace}/${Uri.encodeComponent(group.title)}?pods=$query',
+                                        );
+                                      },
+                                      tooltip: 'Edit Deployment',
                                     ),
                                     if (group.pods.length == 1)
                                       IconButton(

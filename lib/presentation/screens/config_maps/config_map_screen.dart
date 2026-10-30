@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:yaml/yaml.dart';
+import '../../../core/utils/yaml_formatter.dart';
 
 import '../../../data/models/kubernetes/config_map.dart';
 import '../../../data/models/kubernetes/deployment.dart';
@@ -9,12 +10,14 @@ import '../../../data/models/kubernetes/pod.dart';
 import '../../providers/kubernetes_provider.dart';
 
 class ConfigMapScreen extends ConsumerStatefulWidget {
+  final bool editDeployment;
   final String namespace;
   final String groupName;
   final List<String> podNames;
 
   const ConfigMapScreen({
     super.key,
+    this.editDeployment = false,
     required this.namespace,
     required this.groupName,
     required this.podNames,
@@ -30,6 +33,8 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
   String? _selectedConfigMapName;
   String? _selectedDeploymentName;
   bool _deploymentSpecLoading = false;
+  String? _loadedConfigMapName;
+  String? _loadedDeploymentName;
 
   @override
   void dispose() {
@@ -41,23 +46,21 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
   @override
   Widget build(BuildContext context) {
     final podsAsync = ref.watch(podsProvider(widget.namespace));
-    final configMapsAsync = ref.watch(configMapsProvider(widget.namespace));
-    final deploymentsAsync = ref.watch(deploymentsProvider(widget.namespace));
+    final configMapsAsync = widget.editDeployment
+        ? const AsyncData<List<KubeConfigMap>>([])
+        : ref.watch(configMapsProvider(widget.namespace));
+    final deploymentsAsync = widget.editDeployment
+        ? ref.watch(deploymentsProvider(widget.namespace))
+        : const AsyncData<List<KubeDeployment>>([]);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Configuration: ${widget.groupName}'),
+        title: Text(
+            '${widget.editDeployment ? 'Deployment' : 'ConfigMap'}: ${widget.groupName}'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.restart_alt),
-            tooltip: 'Restart Pods',
-            onPressed: () => _restartRelatedPods(),
-          ),
-        ],
       ),
       body: podsAsync.when(
         data: (pods) {
@@ -98,51 +101,22 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
                   );
 
                   if (selectedConfigMap != null &&
-                      _configMapController.text.isEmpty) {
+                      _loadedConfigMapName != selectedConfigMap.name) {
+                    _loadedConfigMapName = selectedConfigMap.name;
                     _configMapController.text =
-                        _formatYaml(selectedConfigMap.data ?? {});
+                        formatYaml(selectedConfigMap.data ?? {});
                   }
                   if (selectedDeployment != null &&
-                      _deploymentController.text.isEmpty &&
+                      _loadedDeploymentName != selectedDeployment.name &&
                       !_deploymentSpecLoading) {
                     _loadDeploymentSpec(selectedDeployment);
                   }
 
-                  return DefaultTabController(
-                    length: 2,
-                    child: Column(
-                      children: [
-                        Material(
-                          color: Theme.of(context).colorScheme.surface,
-                          child: const TabBar(
-                            tabs: [
-                              Tab(text: 'ConfigMap'),
-                              Tab(text: 'Deployment'),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: TabBarView(
-                            children: [
-                              _buildConfigMapEditor(
-                                selectedConfigMap,
-                                relatedConfigMaps,
-                              ),
-                              _buildDeploymentEditor(
-                                selectedDeployment,
-                                relatedDeployments,
-                              ),
-                            ],
-                          ),
-                        ),
-                        _buildFooter(
-                          relatedPods.length,
-                          selectedConfigMap,
-                          selectedDeployment,
-                        ),
-                      ],
-                    ),
-                  );
+                  return widget.editDeployment
+                      ? _buildDeploymentEditor(selectedDeployment,
+                          relatedDeployments, relatedPods.length)
+                      : _buildConfigMapEditor(selectedConfigMap,
+                          relatedConfigMaps, relatedPods.length);
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => Center(child: Text('Error: $error')),
@@ -161,6 +135,7 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
   Widget _buildConfigMapEditor(
     KubeConfigMap? selected,
     List<KubeConfigMap> configMaps,
+    int relatedPodCount,
   ) {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -183,15 +158,16 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
               );
               setState(() {
                 _selectedConfigMapName = value;
-                _configMapController.text = _formatYaml(next?.data ?? {});
+                _configMapController.text = formatYaml(next?.data ?? {});
               });
             },
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: _JsonEditor(
+            child: _YamlEditor(
               controller: _configMapController,
               label: 'ConfigMap data as YAML',
+              actions: _buildActions(relatedPodCount, selected, null),
             ),
           ),
         ],
@@ -202,6 +178,7 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
   Widget _buildDeploymentEditor(
     KubeDeployment? selected,
     List<KubeDeployment> deployments,
+    int relatedPodCount,
   ) {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -239,9 +216,10 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
           Expanded(
             child: _deploymentSpecLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _JsonEditor(
+                : _YamlEditor(
                     controller: _deploymentController,
                     label: 'Deployment spec as YAML',
+                    actions: _buildActions(relatedPodCount, null, selected),
                   ),
           ),
         ],
@@ -249,17 +227,17 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
     );
   }
 
-  Widget _buildFooter(
+  Widget _buildActions(
     int relatedPodCount,
     KubeConfigMap? selectedConfigMap,
     KubeDeployment? selectedDeployment,
   ) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Row(
-        children: [
-          Text('$relatedPodCount pod(s) will restart together'),
-          const Spacer(),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (!widget.editDeployment)
           FilledButton.icon(
             icon: const Icon(Icons.save),
             label: const Text('Save ConfigMap'),
@@ -268,7 +246,7 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
                 ? null
                 : () => _saveConfigMap(selectedConfigMap),
           ),
-          const SizedBox(width: 8),
+        if (widget.editDeployment)
           FilledButton.icon(
             icon: const Icon(Icons.save_as),
             label: const Text('Save Deployment'),
@@ -277,16 +255,16 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
                 ? null
                 : () => _saveDeployment(selectedDeployment),
           ),
-          const SizedBox(width: 8),
-          FilledButton.icon(
-            icon: const Icon(Icons.restart_alt),
-            label: const Text('Restart Pods'),
-            style: _actionButtonStyle(_ActionTone.warning),
-            onPressed:
-                relatedPodCount == 0 ? null : () => _restartRelatedPods(),
-          ),
-        ],
-      ),
+        Tooltip(
+            message: '$relatedPodCount pod(s) will restart together',
+            child: FilledButton.icon(
+              icon: const Icon(Icons.restart_alt),
+              label: const Text('Restart Pods'),
+              style: _actionButtonStyle(_ActionTone.warning),
+              onPressed:
+                  relatedPodCount == 0 ? null : () => _restartRelatedPods(),
+            )),
+      ],
     );
   }
 
@@ -341,49 +319,6 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
       });
   }
 
-  String _formatYaml(Object? data, [int indent = 0]) {
-    if (data is Map) {
-      if (data.isEmpty) return '{}';
-      return data.entries.map((entry) {
-        final key = entry.key.toString();
-        final value = entry.value;
-        if (value is Map || value is List) {
-          return '${_spaces(indent)}$key:\n${_formatYaml(value, indent + 2)}';
-        }
-        return '${_spaces(indent)}$key: ${_formatYamlScalar(value)}';
-      }).join('\n');
-    }
-
-    if (data is List) {
-      if (data.isEmpty) return '${_spaces(indent)}[]';
-      return data.map((value) {
-        if (value is Map || value is List) {
-          return '${_spaces(indent)}-\n${_formatYaml(value, indent + 2)}';
-        }
-        return '${_spaces(indent)}- ${_formatYamlScalar(value)}';
-      }).join('\n');
-    }
-
-    return '${_spaces(indent)}${_formatYamlScalar(data)}';
-  }
-
-  String _spaces(int count) => ' ' * count;
-
-  String _formatYamlScalar(Object? value) {
-    if (value == null) return 'null';
-    if (value is num || value is bool) return value.toString();
-
-    final text = value.toString();
-    if (text.isEmpty) return "''";
-
-    final plainSafe = RegExp(r'^[A-Za-z0-9_./@-]+$').hasMatch(text) &&
-        !const {'true', 'false', 'null', 'yes', 'no', 'on', 'off'}
-            .contains(text.toLowerCase());
-    if (plainSafe) return text;
-
-    return "'${text.replaceAll("'", "''")}'";
-  }
-
   Object? _parseYaml(String content) {
     return _toPlainYamlValue(loadYaml(content));
   }
@@ -408,15 +343,16 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
   }
 
   Future<void> _loadDeploymentSpec(KubeDeployment deployment) async {
-    setState(() => _deploymentSpecLoading = true);
+    _loadedDeploymentName = deployment.name;
+    _deploymentSpecLoading = true;
     try {
       final spec = await ref.read(kubernetesServiceProvider).readDeploymentSpec(
             namespace: deployment.namespace,
             name: deployment.name,
           );
-      if (!mounted) return;
+      if (!mounted || _selectedDeploymentName != deployment.name) return;
       setState(() {
-        _deploymentController.text = _formatYaml(spec);
+        _deploymentController.text = formatYaml(spec);
         _deploymentSpecLoading = false;
       });
     } catch (error) {
@@ -541,30 +477,76 @@ class _ConfigMapScreenState extends ConsumerState<ConfigMapScreen> {
   }
 }
 
-class _JsonEditor extends StatelessWidget {
+class _YamlEditor extends StatelessWidget {
   final TextEditingController controller;
   final String label;
+  final Widget actions;
 
-  const _JsonEditor({
+  const _YamlEditor({
     required this.controller,
     required this.label,
+    required this.actions,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      expands: true,
-      maxLines: null,
-      minLines: null,
-      textAlignVertical: TextAlignVertical.top,
-      style: const TextStyle(fontFamily: 'RobotoMono'),
-      decoration: InputDecoration(
-        labelText: label,
-        alignLabelWithHint: true,
-        border: const OutlineInputBorder(),
-      ),
+    return Column(
+      children: [
+        Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.end,
+            children: [
+              Text(label),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  tooltip: 'Format YAML',
+                  icon: const Icon(Icons.format_align_left),
+                  onPressed: () => _checkYaml(context, format: true),
+                ),
+                IconButton(
+                  tooltip: 'Validate YAML',
+                  icon: const Icon(Icons.check_circle_outline),
+                  onPressed: () => _checkYaml(context),
+                ),
+              ]),
+              actions,
+            ]),
+        const SizedBox(height: 8),
+        Expanded(
+            child: TextField(
+          controller: controller,
+          expands: true,
+          maxLines: null,
+          minLines: null,
+          textAlignVertical: TextAlignVertical.top,
+          style: const TextStyle(fontFamily: 'RobotoMono'),
+          decoration: InputDecoration(
+            labelText: label,
+            alignLabelWithHint: true,
+            border: const OutlineInputBorder(),
+          ),
+        )),
+      ],
     );
+  }
+
+  void _checkYaml(BuildContext context, {bool format = false}) {
+    try {
+      final value = loadYaml(controller.text);
+      if (value is! YamlMap) {
+        throw const FormatException('Expected a YAML object');
+      }
+      if (format) controller.text = formatYaml(value);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(format ? 'YAML formatted' : 'Valid YAML')),
+      );
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invalid YAML: $error')),
+      );
+    }
   }
 }
 

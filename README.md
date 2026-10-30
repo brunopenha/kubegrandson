@@ -182,6 +182,13 @@ In **Settings**, configure:
 
 - `Kubeconfig File` (used by the app for initialization and context switching)
 
+### Remote Minikube / k3s over SSH
+
+See the [SSH connection guide](documentation/remote-cluster-ssh.md) for access
+using a host, SSH port, username, password, and the remote kubeconfig path.
+Open **Remote cluster over SSH** from the toolbar or Settings to let the app
+create and manage the tunnel. The guide also includes a manual terminal alternative.
+
 ### Kubernetes proxy configuration
 
 Kubegrandson can use the proxy environment inherited from the operating
@@ -265,7 +272,7 @@ Install with package manager (UI):
 Install from terminal:
 
 ```bash
-sudo apt install ./kubegrandson_0.8.0_amd64.deb
+sudo apt install ./kubegrandson_0.11.0_amd64.deb
 ```
 
 Uninstall:
@@ -316,15 +323,15 @@ script builds from a Git tag in an isolated worktree, so commit the release
 changes and create the tag before running it:
 
 ```bash
-git tag v0.8.0
-RELEASE_TAG=v0.8.0 TARGETS=linux scripts/create_releases.sh
+git tag v0.11.0
+RELEASE_TAG=v0.11.0 TARGETS=linux scripts/create_releases.sh
 ```
 
 Generated files are written to:
 
 ```text
-build/releases/v0.8.0/kubegrandson_0.8.0_amd64_linux.tar.gz
-build/releases/v0.8.0/kubegrandson_0.8.0_amd64.deb
+build/releases/v0.11.0/kubegrandson_0.11.0_amd64_linux.tar.gz
+build/releases/v0.11.0/kubegrandson_0.11.0_amd64.deb
 ```
 
 The `.deb` file is generated when `dpkg-deb` is installed. To create the
@@ -332,7 +339,7 @@ GitHub release and upload its assets as well, first authenticate with
 `gh auth login`, then run:
 
 ```bash
-RELEASE_TAG=v0.8.0 TARGETS=linux \
+RELEASE_TAG=v0.11.0 TARGETS=linux \
   PUSH_TAGS=1 CREATE_RELEASES=1 UPLOAD_ASSETS=1 \
   scripts/create_releases.sh
 ```

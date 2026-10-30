@@ -15,6 +15,22 @@ class _MainToolbarState extends ConsumerState<MainToolbar> {
   final TextEditingController _logSearchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _logSearchController.text = ref.read(podLogSearchQueryProvider);
+    final initialQuery = _logSearchController.text;
+    ref.read(podLogSearchHistoryProvider.future).then((terms) {
+      if (!mounted ||
+          terms.isEmpty ||
+          initialQuery.isNotEmpty ||
+          ref.read(podLogSearchQueryProvider).isNotEmpty) {
+        return;
+      }
+      ref.read(podLogSearchQueryProvider.notifier).state = terms.first;
+    });
+  }
+
+  @override
   void dispose() {
     _logSearchController.dispose();
     super.dispose();
@@ -22,6 +38,15 @@ class _MainToolbarState extends ConsumerState<MainToolbar> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String>(podLogSearchQueryProvider, (_, value) {
+      if (_logSearchController.text != value) {
+        _logSearchController.value = TextEditingValue(
+          text: value,
+          selection: TextSelection.collapsed(offset: value.length),
+        );
+      }
+    });
+    final history = ref.watch(podLogSearchHistoryProvider).valueOrNull ?? [];
     final filterState = ref.watch(podFilterProvider);
     final logSearchQuery = ref.watch(podLogSearchQueryProvider);
     final isSearchingLogs = ref.watch(isSearchingPodLogsProvider);
@@ -38,7 +63,6 @@ class _MainToolbarState extends ConsumerState<MainToolbar> {
         children: [
           Expanded(
             child: TextField(
-              controller: _logSearchController,
               decoration: InputDecoration(
                 hintText: 'Search pods...',
                 prefixIcon: const Icon(Icons.search),
@@ -58,6 +82,7 @@ class _MainToolbarState extends ConsumerState<MainToolbar> {
           const SizedBox(width: 16),
           Expanded(
             child: TextField(
+              controller: _logSearchController,
               decoration: InputDecoration(
                 hintText: 'Search logs across pods...',
                 prefixIcon: const Icon(Icons.manage_search),
@@ -85,6 +110,21 @@ class _MainToolbarState extends ConsumerState<MainToolbar> {
               },
               onSubmitted: (_) => searchLogsAcrossPods(ref),
             ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Search history',
+            icon: const Icon(Icons.history),
+            enabled: history.isNotEmpty,
+            onSelected: (term) {
+              ref.read(podLogSearchQueryProvider.notifier).state = term;
+              ref.read(podLogSearchMatchesProvider.notifier).state = null;
+            },
+            itemBuilder: (_) => history
+                .map((term) => PopupMenuItem(
+                      value: term,
+                      child: Text(term),
+                    ))
+                .toList(),
           ),
           IconButton(
             icon: isSearchingLogs

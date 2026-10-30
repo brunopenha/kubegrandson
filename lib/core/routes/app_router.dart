@@ -1,4 +1,5 @@
 import 'package:go_router/go_router.dart';
+import '../../presentation/screens/remote_connection/remote_connection_screen.dart';
 
 import '../../presentation/screens/home/home_screen.dart';
 import '../../presentation/screens/config_maps/config_map_screen.dart';
@@ -46,6 +47,9 @@ class AppRouter {
         },
       ),
       GoRoute(
+          path: '/remote-connection',
+          builder: (context, state) => const RemoteConnectionScreen()),
+      GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
       ),
@@ -57,25 +61,28 @@ class AppRouter {
         path: '/xml-analyzer',
         builder: (context, state) => const XmlAnalyzerScreen(),
       ),
-      GoRoute(
-        path: '/configmaps/:namespace/:group',
-        builder: (context, state) {
-          final namespace = state.pathParameters['namespace']!;
-          final group = state.pathParameters['group']!;
-          final pods = state.uri.queryParameters['pods']
-                  ?.split(',')
-                  .where((value) => value.isNotEmpty)
-                  .map(Uri.decodeComponent)
-                  .toList() ??
-              const <String>[];
+      for (final resource in ['configmaps', 'deployments'])
+        GoRoute(
+          path: '/$resource/:namespace/:group',
+          builder: (context, state) {
+            final namespace = state.pathParameters['namespace']!;
+            final group = state.pathParameters['group']!;
+            final pods = state.uri.queryParameters['pods']
+                    ?.split(',')
+                    .where((value) => value.isNotEmpty)
+                    .map(Uri.decodeComponent)
+                    .toList() ??
+                const <String>[];
 
-          return ConfigMapScreen(
-            namespace: namespace,
-            groupName: group,
-            podNames: pods,
-          );
-        },
-      ),
+            return ConfigMapScreen(
+              editDeployment: resource == 'deployments' ||
+                  state.uri.queryParameters['editor'] == 'deployment',
+              namespace: namespace,
+              groupName: group,
+              podNames: pods,
+            );
+          },
+        ),
     ],
   );
 }

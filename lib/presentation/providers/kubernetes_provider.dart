@@ -11,11 +11,14 @@ import '../../data/models/kubernetes/pod.dart';
 import '../../data/models/kubernetes/service.dart';
 import '../../domain/services/kubernetes_service.dart';
 import 'settings_notifier.dart';
+import 'ssh_tunnel_provider.dart';
 
 final initializeProvider = FutureProvider<void>((ref) async {
   final service = ref.watch(kubernetesServiceProvider);
+  final tunnelPath =
+      ref.watch(sshTunnelProvider.select((tunnel) => tunnel.kubeconfigPath));
   final storage = await LocalStorageClient.getInstance();
-  final kubeconfigPath = await storage.getKubeConfigPath();
+  final kubeconfigPath = tunnelPath ?? await storage.getKubeConfigPath();
   final proxyUrl = await storage.getKubernetesProxyUrl();
   final noProxy = await storage.getKubernetesNoProxy();
   final useSystemProxy = await storage.getKubernetesUseSystemProxy();
@@ -33,11 +36,11 @@ final initializeProvider = FutureProvider<void>((ref) async {
       : noProxy ?? '';
   await service.initialize(
     kubeconfigPath: (kubeconfigPath == null || kubeconfigPath.trim().isEmpty)
-        ? null
+        ? service.defaultKubeconfigPath
         : kubeconfigPath.trim(),
     verifyConnection: false,
-    proxyUrl: effectiveProxyUrl,
-    noProxy: effectiveNoProxy,
+    proxyUrl: tunnelPath == null ? effectiveProxyUrl : '',
+    noProxy: tunnelPath == null ? effectiveNoProxy : '127.0.0.1,localhost',
   );
 });
 
@@ -54,6 +57,7 @@ final namespacesProvider = FutureProvider<List<String>>((ref) async {
 });
 
 final contextsProvider = FutureProvider<List<ClusterContext>>((ref) async {
+  await ref.watch(initializeProvider.future);
   final service = ref.watch(kubernetesServiceProvider);
   return service.fetchContexts();
 });
@@ -68,6 +72,33 @@ final selectedPodNamesProvider = StateProvider<Set<String>>((ref) => {});
 final podLogSearchQueryProvider = StateProvider<String>((ref) => '');
 final podLogSearchMatchesProvider = StateProvider<Set<String>?>((ref) => null);
 final isSearchingPodLogsProvider = StateProvider<bool>((ref) => false);
+
+final podLogSearchHistoryProvider =
+    AsyncNotifierProvider<PodLogSearchHistory, List<String>>(
+        PodLogSearchHistory.new);
+
+class PodLogSearchHistory extends AsyncNotifier<List<String>> {
+  Future<void> _pendingWrite = Future.value();
+
+  @override
+  Future<List<String>> build() async {
+    final storage = await LocalStorageClient.getInstance();
+    return storage.getPodLogSearchHistory();
+  }
+
+  Future<void> remember(String term) async {
+    term = term.trim();
+    if (term.isEmpty) return;
+    _pendingWrite = _pendingWrite.then((_) async {
+      final previous = await future;
+      final terms = [term, ...previous.where((entry) => entry != term)];
+      state = AsyncData(terms);
+      final storage = await LocalStorageClient.getInstance();
+      await storage.setPodLogSearchHistory(terms);
+    });
+    await _pendingWrite;
+  }
+}
 
 Set<String> reconcilePodSelection(
   Set<String> selectedPodNames,
@@ -157,6 +188,7 @@ Future<void> searchLogsAcrossPods(WidgetRef ref) async {
     return;
   }
 
+  unawaited(ref.read(podLogSearchHistoryProvider.notifier).remember(query));
   ref.read(isSearchingPodLogsProvider.notifier).state = true;
   try {
     final pods = await ref.read(currentPodsProvider.future);
